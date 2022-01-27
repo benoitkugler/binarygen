@@ -127,7 +127,7 @@ func (an *analyser) fetchAliases(obj types.Object) map[string]ast.Expr {
 // one or many field whose parsing (or writting)
 // is grouped to reduce length checks and allocations
 type structChunk interface {
-	generateParser(fieldIndex int, srcVar, returnVars, offsetExpression string) string
+	generateParser(fieldIndex int, srcVar, returnVars, offsetExpression string) (code string, args string)
 
 	generateAppender(fieldIndex int, srcVar, dstSlice string) string
 }
@@ -333,6 +333,10 @@ type fixedSizeFields []fixedSizeField
 func (an *analyser) fixedSizeFromStruct(str structDef) (fixedSizeFields, bool) {
 	var fixedSize fixedSizeFields
 	for i := 0; i < str.underlying.NumFields(); i++ {
+		// if reflect.StructTag(str.underlying.Tag(i)).Get("bin") == "optional" {
+		// 	return fixedSize, false
+		// }
+
 		field := str.underlying.Field(i)
 
 		if ft := an.isFixedSize(field.Type(), str.aliases[field.Name()]); ft != nil {
@@ -385,6 +389,8 @@ func (an *analyser) newSliceField(field *types.Var, tag string, typeDecl ast.Exp
 			af.sizeLen = bytes4
 		case "64":
 			af.sizeLen = bytes8
+		case "-": // len must be given in argument
+			af.sizeLen = 0
 		default:
 			panic(fmt.Sprintf("missing tag 'len-size' for %s", field.String()))
 		}

@@ -103,8 +103,10 @@ func (af arrayField) generateAppender(index int, srcVar, dstSlice string) string
 	dst%d := %s[L%d:]
 	`, index, dstSlice, dstSlice, dstSlice, af.sizeLen, srcSliceName, af.element.size(), index, dstSlice, index)
 
-	// write the array length
-	code += writeBasicType(fmt.Sprintf("dst%d", index), fmt.Sprintf("len(%s)", srcSliceName), af.sizeLen, 0) + "\n"
+	// write the array length, if required
+	if af.sizeLen != 0 {
+		code += writeBasicType(fmt.Sprintf("dst%d", index), fmt.Sprintf("len(%s)", srcSliceName), af.sizeLen, 0) + "\n"
+	}
 
 	// write the elements
 	code += fmt.Sprintf(`for i, v := range %s {

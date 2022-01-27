@@ -2,13 +2,21 @@ package testpackage
 
 import "math"
 
+type VarInstance struct {
+	Coords    []fl1616 `len-size:"-"`
+	Coords2   []fl1616 `len-size:"-"`
+	Subfamily uint16
+
+	PSStringID uint16 `bin:"optional"`
+}
+
 type lookup struct {
 	a, b, c int32
 	d       uint32
 	e       int64
 	g, h    byte
 	t       tag
-	v       float32
+	v       float214 `bin:"optional"`
 	w       fl32
 }
 
@@ -53,10 +61,21 @@ func (f float214) toUint() uint16 {
 
 type fl32 = float32
 
-func fl32FromUint(v uint16) fl32 {
+func fl32FromUint(v uint32) fl32 {
 	return math.Float32frombits(uint32(v))
 }
 
-func fl32ToUint(f fl32) uint16 {
-	return uint16(math.Float32bits(f))
+func fl32ToUint(f fl32) uint32 {
+	return math.Float32bits(f)
+}
+
+type fl1616 = float32
+
+func fl1616FromUint(v uint32) fl1616 {
+	// value are actually signed integers
+	return fl1616(int32(v)) / (1 << 16)
+}
+
+func fl1616ToUint(f fl1616) uint32 {
+	return uint32(int32(f * (1 << 16)))
 }

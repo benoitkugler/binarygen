@@ -59,19 +59,19 @@ func (fs fixedSizeStruct) generateParser(dstVar, dataSrcVar string, offset int) 
 	return fmt.Sprintf("%s.mustParse(%s[%d:])\n", dstVar, dataSrcVar, offset)
 }
 
-func (fs fixedSizeFields) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) string {
+func (fs fixedSizeFields) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) (code, args string) {
 	if len(fs) == 0 {
-		return ""
+		return "", ""
 	}
 
 	src := fmt.Sprintf("tmp%d", j)
-	code := fmt.Sprintf("%s := %s[%s:]\n", src, dataSrcVar, offsetVar)
+	code = fmt.Sprintf("%s := %s[%s:]\n", src, dataSrcVar, offsetVar)
 	code += checkLength(src, returnVars, fs.size())
 
 	code += fs.generateMustParser(src)
 
 	code += fmt.Sprintf("%s += %d\n", offsetVar, fs.size())
-	return code
+	return code, ""
 }
 
 func (fs fixedSizeFields) generateParserUnique(typeName string) string {
@@ -107,14 +107,22 @@ func (fs fixedSizeFields) generateMustParser(dataSrcVar string) string {
 	return code
 }
 
-func (af arrayField) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) string {
+func (af arrayField) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) (code, lengthName string) {
 	sliceName, lengthName := fmt.Sprintf("tmp%d", j), fmt.Sprintf("arrayLength%d", j)
 
-	code := fmt.Sprintf("%s := %s[%s:]\n", sliceName, dataSrcVar, offsetVar)
-	// step 1 : read the array length
+	returnArgs := ""
+	if af.sizeLen == 0 {
+		lengthName = strings.ToLower(af.field.Name()) + "Length"
+		returnArgs = lengthName + " int"
+	}
 
-	code += checkLength(sliceName, returnVars, af.sizeLen)
-	code += fmt.Sprintf("%s := int(%s)\n", lengthName, readBasicType(sliceName, af.sizeLen, 0))
+	code = fmt.Sprintf("%s := %s[%s:]\n", sliceName, dataSrcVar, offsetVar)
+
+	// step 1 : read the array length, if written in the start of the array
+	if af.sizeLen != 0 {
+		code += checkLength(sliceName, returnVars, af.sizeLen)
+		code += fmt.Sprintf("%s := int(%s)\n", lengthName, readBasicType(sliceName, af.sizeLen, 0))
+	}
 
 	// step 2 : check the expected length
 	code += checkLengthVar(sliceName, returnVars, fmt.Sprintf("%d + %s * %d", af.sizeLen, lengthName, af.element.size()))
@@ -133,24 +141,28 @@ func (af arrayField) generateParser(j int, dataSrcVar string, returnVars string,
 	// step 5 : update the offset
 	code += fmt.Sprintf("%s += %d +  %s * %d\n", offsetVar, af.sizeLen, lengthName, af.element.size())
 
-	return code
+	return code, returnArgs
 }
 
 func generateParserForStruct(chunks []structChunk, name string) string {
 	var finalCode string
 
-	body := "n := 0\n"
+	body, additionalArgs := "n := 0\n", []string{}
 	for j, chunk := range chunks {
-		body += chunk.generateParser(j, "data", fmt.Sprintf("%s{}", name), "n") + "\n"
+		code, args := chunk.generateParser(j, "data", fmt.Sprintf("%s{}", name), "n")
+		body += code + "\n"
+		if args != "" {
+			additionalArgs = append(additionalArgs, args)
+		}
 	}
 
-	finalCode += fmt.Sprintf(`func parse%s(data []byte) (%s, error) {
+	finalCode += fmt.Sprintf(`func parse%s(data []byte, %s) (%s, error) {
 		var out %s
 		%s
 		return out, nil
 	}
 	
-	`, strings.Title(name), name, name, body)
+	`, strings.Title(name), strings.Join(additionalArgs, ","), name, name, body)
 
 	return finalCode
 }
