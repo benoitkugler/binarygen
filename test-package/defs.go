@@ -30,8 +30,8 @@ type complexeSubtable struct {
 	lookups []lookup `len-size:"16"`
 	u, v    float214
 	a, b, c int64
-	array2  []uint32   `len-size:"32"`
-	array3  []float214 `len-size:"64"`
+	array2  []uint32 `len-size:"32"`
+	array3  []fl32   `len-size:"64"`
 }
 
 type arrayLike struct {
@@ -53,10 +53,10 @@ func (f float214) toUint() uint16 {
 
 type fl32 = float32
 
-func float32From1616(v uint32) float32 {
-	return float32(math.Float32frombits(v))
+func fl32FromUint(v uint16) fl32 {
+	return math.Float32frombits(uint32(v))
 }
 
-func float32To1616(f float32) uint32 {
-	return math.Float32bits(float32(f))
+func fl32ToUint(f fl32) uint16 {
+	return uint16(math.Float32bits(f))
 }

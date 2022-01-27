@@ -42,7 +42,10 @@ func readBasicType(sliceName string, size int, offset int) string {
 func (wc withConstructor) generateParser(dstVar, dataSrcVar string, offset int) string {
 	readCode := readBasicType(dataSrcVar, wc.size_, offset)
 
-	return fmt.Sprintf("%s.fromUint(%s)\n", dstVar, readCode)
+	if wc.isMethod {
+		return fmt.Sprintf("%s.fromUint(%s)\n", dstVar, readCode)
+	}
+	return fmt.Sprintf("%s = %sFromUint(%s)\n", dstVar, wc.name_, readCode)
 }
 
 func (bt basicType) generateParser(dstVar, dataSrcVar string, offset int) string {

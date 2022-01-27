@@ -15,51 +15,51 @@ func parseArrayLike(data []byte) (arrayLike, error) {
 		return arrayLike{}, fmt.Errorf("EOF: expected length: 2, got %d", L)
 	}
 	arrayLength0 := int(binary.BigEndian.Uint16(tmp0[0:2]))
-	if L := len(tmp0); L < 2+arrayLength0*38 {
-		return arrayLike{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength0*38, L)
+	if L := len(tmp0); L < 2+arrayLength0*36 {
+		return arrayLike{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength0*36, L)
 	}
 	out.array = make([]lookup, arrayLength0)
 	for i := range out.array {
-		chunk := tmp0[2+i*38:]
+		chunk := tmp0[2+i*36:]
 		out.array[i].mustParse(chunk[0:])
 
 	}
-	n += 2 + arrayLength0*38
+	n += 2 + arrayLength0*36
 
 	tmp1 := data[n:]
 	if L := len(tmp1); L < 2 {
 		return arrayLike{}, fmt.Errorf("EOF: expected length: 2, got %d", L)
 	}
 	arrayLength1 := int(binary.BigEndian.Uint16(tmp1[0:2]))
-	if L := len(tmp1); L < 2+arrayLength1*76 {
-		return arrayLike{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*76, L)
+	if L := len(tmp1); L < 2+arrayLength1*72 {
+		return arrayLike{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*72, L)
 	}
 	out.array2 = make([]composed, arrayLength1)
 	for i := range out.array2 {
-		chunk := tmp1[2+i*76:]
+		chunk := tmp1[2+i*72:]
 		out.array2[i].mustParse(chunk[0:])
 
 	}
-	n += 2 + arrayLength1*76
+	n += 2 + arrayLength1*72
 
 	return out, nil
 }
 
 func (item arrayLike) appendTo(data []byte) []byte {
 	L0 := len(data)
-	data = append(data, make([]byte, 2+len(item.array)*38)...)
+	data = append(data, make([]byte, 2+len(item.array)*36)...)
 	dst0 := data[L0:]
 	binary.BigEndian.PutUint16(dst0, uint16(len(item.array)))
 	for i, v := range item.array {
-		chunk := dst0[2+i*38:]
+		chunk := dst0[2+i*36:]
 		v.writeTo(chunk)
 	}
 	L1 := len(data)
-	data = append(data, make([]byte, 2+len(item.array2)*76)...)
+	data = append(data, make([]byte, 2+len(item.array2)*72)...)
 	dst1 := data[L1:]
 	binary.BigEndian.PutUint16(dst1, uint16(len(item.array2)))
 	for i, v := range item.array2 {
-		chunk := dst1[2+i*76:]
+		chunk := dst1[2+i*72:]
 		v.writeTo(chunk)
 	}
 
@@ -84,16 +84,16 @@ func parseComplexeSubtable(data []byte) (complexeSubtable, error) {
 		return complexeSubtable{}, fmt.Errorf("EOF: expected length: 2, got %d", L)
 	}
 	arrayLength1 := int(binary.BigEndian.Uint16(tmp1[0:2]))
-	if L := len(tmp1); L < 2+arrayLength1*38 {
-		return complexeSubtable{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*38, L)
+	if L := len(tmp1); L < 2+arrayLength1*36 {
+		return complexeSubtable{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*36, L)
 	}
 	out.lookups = make([]lookup, arrayLength1)
 	for i := range out.lookups {
-		chunk := tmp1[2+i*38:]
+		chunk := tmp1[2+i*36:]
 		out.lookups[i].mustParse(chunk[0:])
 
 	}
-	n += 2 + arrayLength1*38
+	n += 2 + arrayLength1*36
 
 	tmp2 := data[n:]
 	if L := len(tmp2); L < 28 {
@@ -131,11 +131,10 @@ func parseComplexeSubtable(data []byte) (complexeSubtable, error) {
 	if L := len(tmp4); L < 8+arrayLength4*2 {
 		return complexeSubtable{}, fmt.Errorf("EOF: expected length: %d, got %d", 8+arrayLength4*2, L)
 	}
-	out.array3 = make([]float214, arrayLength4)
+	out.array3 = make([]fl32, arrayLength4)
 	for i := range out.array3 {
 		chunk := tmp4[8+i*2:]
-		out.array3[i].fromUint(binary.BigEndian.Uint16(chunk[0:2]))
-
+		out.array3[i] = fl32FromUint(binary.BigEndian.Uint16(chunk[0:2]))
 	}
 	n += 8 + arrayLength4*2
 
@@ -152,11 +151,11 @@ func (item complexeSubtable) appendTo(data []byte) []byte {
 	binary.BigEndian.PutUint16(dst0[4:], uint16(item.y))
 
 	L1 := len(data)
-	data = append(data, make([]byte, 2+len(item.lookups)*38)...)
+	data = append(data, make([]byte, 2+len(item.lookups)*36)...)
 	dst1 := data[L1:]
 	binary.BigEndian.PutUint16(dst1, uint16(len(item.lookups)))
 	for i, v := range item.lookups {
-		chunk := dst1[2+i*38:]
+		chunk := dst1[2+i*36:]
 		v.writeTo(chunk)
 	}
 	L2 := len(data)
@@ -183,42 +182,42 @@ func (item complexeSubtable) appendTo(data []byte) []byte {
 	binary.BigEndian.PutUint64(dst4, uint64(len(item.array3)))
 	for i, v := range item.array3 {
 		chunk := dst4[8+i*2:]
-		binary.BigEndian.PutUint16(chunk, uint16(v.toUint()))
+		binary.BigEndian.PutUint16(chunk, uint16(fl32ToUint(v)))
 	}
 
 	return data
 }
 
 func (out *composed) mustParse(data []byte) {
-	_ = data[75] // early bound checking
+	_ = data[71] // early bound checking
 	out.a.mustParse(data[0:])
-	out.b.mustParse(data[38:])
+	out.b.mustParse(data[36:])
 }
 
 func parseComposed(data []byte) (composed, error) {
 	var out composed
-	if L := len(data); L < 76 {
-		return composed{}, fmt.Errorf("EOF: expected length: 76, got %d", L)
+	if L := len(data); L < 72 {
+		return composed{}, fmt.Errorf("EOF: expected length: 72, got %d", L)
 	}
 	out.mustParse(data)
 	return out, nil
 }
 func (item composed) writeTo(data []byte) {
-	_ = data[75] // early bound checking
+	_ = data[71] // early bound checking
 	item.a.writeTo(data)
-	item.b.writeTo(data[38:])
+	item.b.writeTo(data[36:])
 }
 
 func (item composed) appendTo(data []byte) []byte {
 	L := len(data)
-	data = append(data, make([]byte, 76)...)
+	data = append(data, make([]byte, 72)...)
 	dst := data[L:]
 	item.writeTo(dst)
 	return data
 }
 
 func (out *lookup) mustParse(data []byte) {
-	_ = data[37] // early bound checking
+	_ = data[35] // early bound checking
 	out.a = int32(binary.BigEndian.Uint32(data[0:4]))
 	out.b = int32(binary.BigEndian.Uint32(data[4:8]))
 	out.c = int32(binary.BigEndian.Uint32(data[8:12]))
@@ -228,19 +227,19 @@ func (out *lookup) mustParse(data []byte) {
 	out.h = byte(data[25])
 	out.t = tag(binary.BigEndian.Uint32(data[26:30]))
 	out.v = float32(binary.BigEndian.Uint32(data[30:34]))
-	out.w = float32(binary.BigEndian.Uint32(data[34:38]))
+	out.w = fl32FromUint(binary.BigEndian.Uint16(data[34:36]))
 }
 
 func parseLookup(data []byte) (lookup, error) {
 	var out lookup
-	if L := len(data); L < 38 {
-		return lookup{}, fmt.Errorf("EOF: expected length: 38, got %d", L)
+	if L := len(data); L < 36 {
+		return lookup{}, fmt.Errorf("EOF: expected length: 36, got %d", L)
 	}
 	out.mustParse(data)
 	return out, nil
 }
 func (item lookup) writeTo(data []byte) {
-	_ = data[37] // early bound checking
+	_ = data[35] // early bound checking
 	binary.BigEndian.PutUint32(data, uint32(item.a))
 	binary.BigEndian.PutUint32(data[4:], uint32(item.b))
 	binary.BigEndian.PutUint32(data[8:], uint32(item.c))
@@ -250,12 +249,12 @@ func (item lookup) writeTo(data []byte) {
 	data[25] = byte(item.h)
 	binary.BigEndian.PutUint32(data[26:], uint32(item.t))
 	binary.BigEndian.PutUint32(data[30:], uint32(item.v))
-	binary.BigEndian.PutUint32(data[34:], uint32(item.w))
+	binary.BigEndian.PutUint16(data[34:], uint16(fl32ToUint(item.w)))
 }
 
 func (item lookup) appendTo(data []byte) []byte {
 	L := len(data)
-	data = append(data, make([]byte, 38)...)
+	data = append(data, make([]byte, 36)...)
 	dst := data[L:]
 	item.writeTo(dst)
 	return data
@@ -279,16 +278,16 @@ func parseSimpleSubtable(data []byte) (simpleSubtable, error) {
 		return simpleSubtable{}, fmt.Errorf("EOF: expected length: 2, got %d", L)
 	}
 	arrayLength1 := int(binary.BigEndian.Uint16(tmp1[0:2]))
-	if L := len(tmp1); L < 2+arrayLength1*38 {
-		return simpleSubtable{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*38, L)
+	if L := len(tmp1); L < 2+arrayLength1*36 {
+		return simpleSubtable{}, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength1*36, L)
 	}
 	out.lookups = make([]lookup, arrayLength1)
 	for i := range out.lookups {
-		chunk := tmp1[2+i*38:]
+		chunk := tmp1[2+i*36:]
 		out.lookups[i].mustParse(chunk[0:])
 
 	}
-	n += 2 + arrayLength1*38
+	n += 2 + arrayLength1*36
 
 	tmp2 := data[n:]
 	if L := len(tmp2); L < 2 {
@@ -319,11 +318,11 @@ func (item simpleSubtable) appendTo(data []byte) []byte {
 	binary.BigEndian.PutUint16(dst0[4:], uint16(item.y))
 
 	L1 := len(data)
-	data = append(data, make([]byte, 2+len(item.lookups)*38)...)
+	data = append(data, make([]byte, 2+len(item.lookups)*36)...)
 	dst1 := data[L1:]
 	binary.BigEndian.PutUint16(dst1, uint16(len(item.lookups)))
 	for i, v := range item.lookups {
-		chunk := dst1[2+i*38:]
+		chunk := dst1[2+i*36:]
 		v.writeTo(chunk)
 	}
 	L2 := len(data)

@@ -32,7 +32,12 @@ func writeBasicType(sliceName, varName string, size int, offset int) string {
 }
 
 func (wc withConstructor) generateWriter(srcVar, dstSlice string, offset int) string {
-	accesVar := fmt.Sprintf("%s.toUint()", srcVar)
+	var accesVar string
+	if wc.isMethod {
+		accesVar = fmt.Sprintf("%s.toUint()", srcVar)
+	} else {
+		accesVar = fmt.Sprintf("%sToUint(%s)", wc.name_, srcVar)
+	}
 	return writeBasicType(dstSlice, accesVar, wc.size_, offset)
 }
 

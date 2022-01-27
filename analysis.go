@@ -265,24 +265,21 @@ func getBinaryLayout(t *types.Basic) (int, bool) {
 	}
 }
 
+// return the TypeName or nil if `typeDecl` is not an alias
+func (an *analyser) isAlias(typeDecl ast.Expr) *types.TypeName {
+	if ident, ok := typeDecl.(*ast.Ident); ok {
+		alias := an.scope.Lookup(ident.Name)
+		if named, ok := alias.(*types.TypeName); ok && named.IsAlias() {
+			return named
+		}
+	}
+	return nil
+}
+
 // return the new binary layout, or 0
 // if always returns 0 if ty is not a *types.Named
 // check for method fromUint() or function xxxFromUint()
 func (an *analyser) newWithConstructor(ty types.Type, typeDecl ast.Expr) (withConstructor, bool) {
-	// check for aliases
-	if ident, ok := typeDecl.(*ast.Ident); ok {
-		alias := an.scope.Lookup(ident.Name)
-		if named, ok := alias.(*types.TypeName); ok && named.IsAlias() {
-			fmt.Println("found alias", ident.Name)
-		}
-	}
-
-	// a type with a method is a named type
-	named, ok := ty.(*types.Named)
-	if !ok {
-		return withConstructor{}, false
-	}
-
 	layoutFromFunc := func(fnType types.Type) (int, bool) {
 		sig, ok := fnType.(*types.Signature)
 		if !ok {
@@ -295,20 +292,35 @@ func (an *analyser) newWithConstructor(ty types.Type, typeDecl ast.Expr) (withCo
 		return 0, false
 	}
 
-	for i := 0; i < named.NumMethods(); i++ {
-		meth := named.Method(i)
-		if meth.Name() == "fromUint" {
-			if layout, ok := layoutFromFunc(meth.Type()); ok {
-				return withConstructor{name_: typeName(ty), size_: layout}, true
+	// a type with a method is a named type
+	named, ok := ty.(*types.Named)
+	if ok {
+		for i := 0; i < named.NumMethods(); i++ {
+			meth := named.Method(i)
+			if meth.Name() == "fromUint" {
+				if layout, ok := layoutFromFunc(meth.Type()); ok {
+					return withConstructor{name_: typeName(ty), size_: layout, isMethod: true}, true
+				}
 			}
 		}
 	}
 
-	functionName := named.Obj().Name() + "FromUint"
+	// check for aliases
+	alias := an.isAlias(typeDecl)
+	var tn *types.TypeName
+	if alias != nil { // use the alias instead of the underlying type
+		tn = alias
+	} else if ok {
+		tn = named.Obj()
+	} else {
+		return withConstructor{}, false
+	}
+
+	functionName := tn.Name() + "FromUint"
 	fn := an.scope.Lookup(functionName)
 	if fn != nil {
 		if layout, ok := layoutFromFunc(fn.Type()); ok {
-			return withConstructor{name_: typeName(ty), size_: layout}, true
+			return withConstructor{name_: tn.Name(), size_: layout, isMethod: false}, true
 		}
 	}
 
@@ -348,12 +360,17 @@ type arrayField struct {
 	element fixedSizeType
 }
 
+func sliceElement(typeDecl ast.Expr) ast.Expr {
+	slice := typeDecl.(*ast.ArrayType)
+	return slice.Elt
+}
+
 func (an *analyser) newSliceField(field *types.Var, tag string, typeDecl ast.Expr) (arrayField, bool) {
 	if fieldType, ok := field.Type().Underlying().(*types.Slice); ok {
 		var af arrayField
 		af.field = field
 
-		fieldElement := an.isFixedSize(fieldType.Elem(), typeDecl) // TODO: extract typeDecl
+		fieldElement := an.isFixedSize(fieldType.Elem(), sliceElement(typeDecl)) // TODO: extract typeDecl
 		if fieldElement == nil {
 			panic("slice of variable length element are not supported")
 		}
