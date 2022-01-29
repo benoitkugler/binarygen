@@ -16,7 +16,7 @@ type analyser struct {
 	ast   *ast.File    // file containing types declaration
 	fset  *token.FileSet
 
-	structs map[string]structDef // by name
+	structDefs map[string]structDef // by name
 
 	pkgName, filePath string
 }
@@ -52,7 +52,7 @@ func importSource(path string) (analyser, error) {
 		}
 	}
 
-	out.loadStructs()
+	out.fetchStructs()
 
 	return out, nil
 }
@@ -64,9 +64,9 @@ type structDef struct {
 	name       string
 }
 
-// return the structs in the given input file
-func (an *analyser) loadStructs() {
-	an.structs = map[string]structDef{}
+// register the structs in the given input file
+func (an *analyser) fetchStructs() {
+	an.structDefs = map[string]structDef{}
 
 	for _, name := range an.scope.Names() {
 		obj := an.scope.Lookup(name)
@@ -83,7 +83,7 @@ func (an *analyser) loadStructs() {
 				name:       name,
 				aliases:    an.fetchAliases(obj),
 			}
-			an.structs[name] = str
+			an.structDefs[name] = str
 		}
 	}
 }
@@ -178,7 +178,7 @@ func (an *analyser) isFixedSize(ty types.Type, typeDecl ast.Expr) fixedSizeType 
 			panic("anonymous struct not supported")
 		}
 
-		fields, ok := an.fixedSizeFromStruct(an.structs[named.Obj().Name()])
+		fields, ok := an.fixedSizeFromStruct(an.structDefs[named.Obj().Name()])
 		if ok {
 			return fixedSizeStruct{
 				type_: underlying,
@@ -234,6 +234,21 @@ func (f fixedSizeStruct) name() string {
 
 func (f fixedSizeStruct) size() int {
 	return f.size_
+}
+
+// integer offset to the actual data
+type offset struct {
+	target types.Type
+
+	size_ int
+}
+
+func (offset) name() string {
+	return ""
+}
+
+func (o offset) size() int {
+	return o.size_
 }
 
 // how the type is written as binary
@@ -333,10 +348,6 @@ type fixedSizeFields []fixedSizeField
 func (an *analyser) fixedSizeFromStruct(str structDef) (fixedSizeFields, bool) {
 	var fixedSize fixedSizeFields
 	for i := 0; i < str.underlying.NumFields(); i++ {
-		// if reflect.StructTag(str.underlying.Tag(i)).Get("bin") == "optional" {
-		// 	return fixedSize, false
-		// }
-
 		field := str.underlying.Field(i)
 
 		if ft := an.isFixedSize(field.Type(), str.aliases[field.Name()]); ft != nil {
@@ -369,31 +380,38 @@ func sliceElement(typeDecl ast.Expr) ast.Expr {
 	return slice.Elt
 }
 
-func (an *analyser) newSliceField(field *types.Var, tag string, typeDecl ast.Expr) (arrayField, bool) {
+func sizeFromTag(tag string) int {
+	switch tag {
+	case "16":
+		return bytes2
+	case "32":
+		return bytes4
+	case "64":
+		return bytes8
+	case "-": // len must be given in argument
+		return 0
+	default:
+		return -1
+	}
+}
+
+func (an *analyser) newSliceField(field *types.Var, tag reflect.StructTag, typeDecl ast.Expr) (arrayField, bool) {
 	if fieldType, ok := field.Type().Underlying().(*types.Slice); ok {
 		var af arrayField
 		af.field = field
 
-		fieldElement := an.isFixedSize(fieldType.Elem(), sliceElement(typeDecl)) // TODO: extract typeDecl
+		fieldElement := an.isFixedSize(fieldType.Elem(), sliceElement(typeDecl))
 		if fieldElement == nil {
 			panic("slice of variable length element are not supported")
 		}
 
 		af.element = fieldElement
 
-		tag := reflect.StructTag(tag)
-		switch tag.Get("len-size") {
-		case "16":
-			af.sizeLen = bytes2
-		case "32":
-			af.sizeLen = bytes4
-		case "64":
-			af.sizeLen = bytes8
-		case "-": // len must be given in argument
-			af.sizeLen = 0
-		default:
+		size := sizeFromTag(tag.Get("len-size"))
+		if size == -1 {
 			panic(fmt.Sprintf("missing tag 'len-size' for %s", field.String()))
 		}
+		af.sizeLen = size
 
 		return af, true
 	}
@@ -401,11 +419,24 @@ func (an *analyser) newSliceField(field *types.Var, tag string, typeDecl ast.Exp
 	return arrayField{}, false
 }
 
+// variable size struct
+type namedTypeField struct {
+	field *types.Var
+	name  string
+}
+
 func (an *analyser) analyseStruct(str structDef) (out []structChunk) {
 	var fixedSize fixedSizeFields
 	st := str.underlying
 	for i := 0; i < st.NumFields(); i++ {
-		field, tag := st.Field(i), st.Tag(i)
+		field, tag := st.Field(i), reflect.StructTag(st.Tag(i))
+
+		// if s := sizeFromTag(tag.Get("offset-size")); s != -1 {
+		// 	// the field is an offset to the actual data
+		// 	fixedSize = append(fixedSize, offset{target: field.Type(), size_: s})
+		// 	continue
+		// }
+
 		typeDecl := str.aliases[field.Name()]
 		// basic types
 		if ft := an.isFixedSize(field.Type(), typeDecl); ft != nil {
@@ -426,6 +457,12 @@ func (an *analyser) analyseStruct(str structDef) (out []structChunk) {
 			continue
 		}
 
+		named, ok := field.Type().(*types.Named)
+		if ok {
+			out = append(out, namedTypeField{field: field, name: named.Obj().Name()})
+			continue
+		}
+
 		panic(fmt.Sprintf("unsupported field in struct %s", field))
 	}
 
@@ -435,4 +472,202 @@ func (an *analyser) analyseStruct(str structDef) (out []structChunk) {
 	}
 
 	return out
+}
+
+// ----------------------------------------- V2 -----------------------------------------
+
+type fieldType interface {
+	staticSize() (int, bool)
+}
+
+func (of offset) staticSize() (int, bool)          { return of.size_, true }
+func (wc withConstructor) staticSize() (int, bool) { return wc.size_, true }
+func (bt basicType) staticSize() (int, bool)       { return bt.binaryLayout, true }
+func (sl slice) staticSize() (int, bool)           { return 0, false }
+
+// staticSize returns the statically known size of the type
+// or false if it is dynamic or requires additional length check
+func (sl structLayout) staticSize() (int, bool) {
+	totalSize := 0
+	for _, field := range sl.fields {
+		// special case for offsets : they have a static size
+		// but still require additional length check
+		if _, isOffset := field.type_.(offset); isOffset {
+			return 0, false
+		}
+
+		size, ok := field.type_.staticSize()
+		if !ok {
+			return 0, false
+		}
+		totalSize += size
+	}
+	return totalSize, true
+}
+
+// []<element> slice type
+type slice struct {
+	element fieldType
+	sizeLen int
+}
+
+type structField struct {
+	type_ fieldType
+	// astDecl ast.Expr // used to detect aliases
+	name string // name of the field
+}
+
+// structLayout is the result of the analysis of a Go struct
+type structLayout struct {
+	name string // name of the type
+
+	fields []structField
+}
+
+// as an optimization groups the contiguous fixed-size fields
+func (sl structLayout) groups() (out []group) {
+	var fixedSize fixedSizeList
+	for _, field := range sl.fields {
+		if _, isFixedSize := field.type_.staticSize(); isFixedSize {
+			fixedSize = append(fixedSize, field)
+			continue
+		}
+
+		// close the current fixedSize array ...
+		if len(fixedSize) != 0 {
+			out = append(out, fixedSize)
+			fixedSize = nil
+		}
+
+		// and add a standalone field
+		out = append(out, standaloneField(field))
+	}
+
+	// close the current fixedSize array if needed
+	if len(fixedSize) != 0 {
+		out = append(out, fixedSize)
+	}
+
+	return out
+}
+
+// returns `true` is the type is referenced in other types
+func (an *analyser) isTypeReferenced(st structLayout) bool {
+	_, has := an.structDefs[st.name]
+	return has
+}
+
+func (an *analyser) handleFieldType(ty types.Type, tag reflect.StructTag, astDecl ast.Expr) fieldType {
+	// special case for offsets
+	if s := sizeFromTag(tag.Get("offset-size")); s != -1 {
+		// the field is an offset to the actual data
+		return offset{target: ty, size_: s}
+	}
+
+	// basic fixed size types
+	if ft := an.handleFixedSize(ty, astDecl); ft != nil {
+		return ft
+	}
+
+	// and try for slice
+	af, ok := an.handleSlice(ty, tag, astDecl)
+	if ok {
+		return af
+	}
+
+	// named struct
+	named, ok := ty.(*types.Named)
+	if ok {
+		return an.getOrAnalyseStruct(named.Obj().Name())
+	}
+
+	panic(fmt.Sprintf("unsupported field type in struct: %s", ty))
+}
+
+// check is the underlying type as fixed size;
+// return nil if not
+func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) fieldType {
+	// first check for custom constructor
+	// if present, only the constructor type matters
+	if wc, ok := an.newWithConstructor(ty, typeDecl); ok { // overide underlying basic info
+		return wc
+	}
+
+	switch underlying := ty.Underlying().(type) {
+	case *types.Basic:
+		name := underlying.Name()
+		if n := typeName(ty); n != "" {
+			name = n
+		}
+		if L, ok := getBinaryLayout(underlying); ok {
+			return basicType{name_: name, binaryLayout: L}
+		}
+	case *types.Array:
+		panic("array not supported yet")
+	}
+	return nil
+}
+
+func (an *analyser) handleSlice(ty types.Type, tag reflect.StructTag, typeDecl ast.Expr) (slice, bool) {
+	if fieldType, ok := ty.Underlying().(*types.Slice); ok {
+		var sl slice
+
+		fieldElement := an.handleFieldType(fieldType.Elem(), "", sliceElement(typeDecl))
+		if fieldElement == nil {
+			panic("slice of variable length element are not supported")
+		}
+
+		sl.element = fieldElement
+
+		size := sizeFromTag(tag.Get("len-size"))
+		if size == -1 {
+			panic(fmt.Sprintf("missing tag 'len-size' for type %s", ty))
+		}
+		sl.sizeLen = size
+
+		return sl, true
+	}
+
+	return slice{}, false
+}
+
+func (an *analyser) getOrAnalyseStruct(typeName string) structLayout {
+	// TODO: cache
+	if def, ok := an.structDefs[typeName]; ok {
+		return an.analyzeStruct(def)
+	}
+
+	panic("unknow type name" + typeName)
+}
+
+func (an *analyser) analyzeStruct(str structDef) (out structLayout) {
+	out.name = str.name
+
+	st := str.underlying
+	for i := 0; i < st.NumFields(); i++ {
+		field, tag := st.Field(i), reflect.StructTag(st.Tag(i))
+
+		var sf structField
+		sf.name = field.Name()
+		astDecl := str.aliases[field.Name()]
+		sf.type_ = an.handleFieldType(field.Type(), tag, astDecl)
+
+		out.fields = append(out.fields, sf)
+	}
+
+	return out
+}
+
+// groups
+
+type fixedSizeList []structField
+
+// returns the total size needed by the fields
+func (fs fixedSizeList) size() int {
+	totalSize := 0
+	for _, field := range fs {
+		s, _ := field.type_.staticSize() // by construction, staticSize returns true
+		totalSize += s
+	}
+	return totalSize
 }

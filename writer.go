@@ -117,6 +117,10 @@ func (af arrayField) generateAppender(index int, srcVar, dstSlice string) string
 	return code
 }
 
+func (vs namedTypeField) generateAppender(index int, srcVar, dstSlice string) string {
+	return fmt.Sprintf("%s = %s.%s.appendTo(%s)", dstSlice, srcVar, vs.field.Name(), dstSlice)
+}
+
 func generateAppenderForStruct(chunks []structChunk, typeName string) string {
 	var finalCode string
 

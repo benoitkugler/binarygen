@@ -20,6 +20,16 @@ type lookup struct {
 	w       fl32
 }
 
+type embeded struct {
+	a, b byte
+	c    []uint16 `len-size:"16"`
+}
+
+type composed2 struct {
+	a, b, c byte
+	embeded
+}
+
 type composed struct {
 	a lookup
 	b lookup
@@ -78,4 +88,11 @@ func fl1616FromUint(v uint32) fl1616 {
 
 func fl1616ToUint(f fl1616) uint32 {
 	return uint32(int32(f * (1 << 16)))
+}
+
+type withOffset struct {
+	version        uint16
+	offsetToSlice  []uint64 `offset-size:"32"`
+	offsetToStruct lookup   `offset-size:"32"`
+	a, b, c        byte
 }
