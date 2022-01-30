@@ -8,183 +8,39 @@ import (
 
 // generated code - parser
 
-// return the code needed to check the length of a byte slice
-func checkLength(sliceName, returnVars string, minLength int) string {
-	return fmt.Sprintf(`if L := len(%s); L < %d {
-		return %s, fmt.Errorf("EOF: expected length: %d, got %%d", L)
-	}
-	`, sliceName, minLength, returnVars, minLength)
-}
-
-// return the code needed to check the length of a byte slice
-func checkLengthVar(sliceName, returnVars string, lengthExpression string) string {
-	return fmt.Sprintf(`if L := len(%s); L < %s {
-		return %s, fmt.Errorf("EOF: expected length: %%d, got %%d",%s, L)
-	}
-	`, sliceName, lengthExpression, returnVars, lengthExpression)
-}
-
 // do not perform bounds check
-func readBasicType(sliceName string, size int, offset int) string {
+func readBasicType(sliceName string, size int, offset string) string {
 	switch size {
 	case bytes1:
-		return fmt.Sprintf("%s[%d]", sliceName, offset)
+		if offset == "" {
+			offset = "0"
+		}
+		return fmt.Sprintf("%s[%s]", sliceName, offset)
 	case bytes2:
-		return fmt.Sprintf("binary.BigEndian.Uint16(%s[%d:%d])", sliceName, offset, offset+2)
+		return fmt.Sprintf("binary.BigEndian.Uint16(%s[%s:])", sliceName, offset)
 	case bytes4:
-		return fmt.Sprintf("binary.BigEndian.Uint32(%s[%d:%d])", sliceName, offset, offset+4)
+		return fmt.Sprintf("binary.BigEndian.Uint32(%s[%s:])", sliceName, offset)
 	case bytes8:
-		return fmt.Sprintf("binary.BigEndian.Uint64(%s[%d:%d])", sliceName, offset, offset+8)
+		return fmt.Sprintf("binary.BigEndian.Uint64(%s[%s:])", sliceName, offset)
 	default:
 		panic(fmt.Sprintf("size not supported %d", size))
 	}
 }
 
-func (wc withConstructor) generateParser(dstVar, dataSrcVar string, offset int) string {
-	readCode := readBasicType(dataSrcVar, wc.size_, offset)
-
-	if wc.isMethod {
-		return fmt.Sprintf("%s.fromUint(%s)\n", dstVar, readCode)
-	}
-	return fmt.Sprintf("%s = %sFromUint(%s)\n", dstVar, wc.name_, readCode)
-}
-
-func (bt basicType) generateParser(dstVar, dataSrcVar string, offset int) string {
-	readCode := readBasicType(dataSrcVar, bt.size(), offset)
-
-	constructor := bt.name()
-	return fmt.Sprintf("%s = %s(%s)\n", dstVar, constructor, readCode)
-}
-
-func (fs fixedSizeStruct) generateParser(dstVar, dataSrcVar string, offset int) string {
-	return fmt.Sprintf("%s.mustParse(%s[%d:])\n", dstVar, dataSrcVar, offset)
-}
-
-func (fs fixedSizeFields) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) (code, args string) {
-	if len(fs) == 0 {
-		return "", ""
-	}
-
-	src := fmt.Sprintf("tmp%d", j)
-	code = fmt.Sprintf("%s := %s[%s:]\n", src, dataSrcVar, offsetVar)
-	code += checkLength(src, returnVars, fs.size())
-
-	code += fs.generateMustParser(src)
-
-	code += fmt.Sprintf("%s += %d\n", offsetVar, fs.size())
-	return code, ""
-}
-
-func (fs fixedSizeFields) generateParserUnique(typeName string) string {
-	if len(fs) == 0 {
-		return ""
-	}
-
-	returnVars := fmt.Sprintf("%s{}, 0", typeName)
-	body := checkLength("data", returnVars, fs.size())
-
-	// call mustParse instead of copying instructions
-	body += fmt.Sprintf("out.mustParse(%s)", "data")
-
-	finalCode := fmt.Sprintf(`func parse%s(data []byte) (%s, int, error) {
-		var out %s
-		%s
-		return out, %d, nil
-	}
-	`, strings.Title(typeName), typeName, typeName, body, fs.size())
-
-	return finalCode
-}
-
-func (fs fixedSizeFields) generateMustParser(dataSrcVar string) string {
-	code := fmt.Sprintf("_ = %s[%d] // early bound checking\n", dataSrcVar, fs.size()-1)
-
-	pos := 0
-	for _, field := range fs {
-		code += field.type_.generateParser(fmt.Sprintf("out.%s", field.field.Name()), dataSrcVar, pos)
-		pos += field.type_.size()
-	}
-
-	return code
-}
-
-func (af arrayField) generateParser(j int, dataSrcVar string, returnVars string, offsetVar string) (code, lengthName string) {
-	sliceName, lengthName := fmt.Sprintf("tmp%d", j), fmt.Sprintf("arrayLength%d", j)
-
-	returnArgs := ""
-	if af.sizeLen == 0 {
-		lengthName = strings.ToLower(af.field.Name()) + "Length"
-		returnArgs = lengthName + " int"
-	}
-
-	code = fmt.Sprintf("%s := %s[%s:]\n", sliceName, dataSrcVar, offsetVar)
-
-	// step 1 : read the array length, if written in the start of the array
-	if af.sizeLen != 0 {
-		code += checkLength(sliceName, returnVars, af.sizeLen)
-		code += fmt.Sprintf("%s := int(%s)\n", lengthName, readBasicType(sliceName, af.sizeLen, 0))
-	}
-
-	// step 2 : check the expected length
-	code += checkLengthVar(sliceName, returnVars, fmt.Sprintf("%d + %s * %d", af.sizeLen, lengthName, af.element.size()))
-
-	// step 3 : allocate the slice - it is garded by the check above
-	code += fmt.Sprintf("out.%s = make([]%s, %s)\n", af.field.Name(), af.element.name(), lengthName)
-
-	// step 4 : loop to parse every elements
-	loopBody := af.element.generateParser(fmt.Sprintf("out.%s[i]", af.field.Name()), "chunk", 0)
-	code += fmt.Sprintf(`for i := range out.%s {
-		chunk := %s[%d + i * %d:]
-		%s
-	}
-	`, af.field.Name(), sliceName, af.sizeLen, af.element.size(), loopBody)
-
-	// step 5 : update the offset
-	code += fmt.Sprintf("%s += %d +  %s * %d\n", offsetVar, af.sizeLen, lengthName, af.element.size())
-
-	return code, returnArgs
-}
-
-func (vs namedTypeField) generateParser(fieldIndex int, srcVar, returnVars, offsetExpression string) (code string, args string) {
-	code = fmt.Sprintf(` var (
-		read%d int 
-		err%d error
-	)
-	out.%s, read%d, err%d = parse%s(%s[%s:])
-	if err%d != nil {
-		return %s,  err%d
-	}
-	`, fieldIndex, fieldIndex, vs.field.Name(), fieldIndex, fieldIndex,
-		strings.Title(vs.name), srcVar, offsetExpression, fieldIndex, returnVars, fieldIndex)
-	code += fmt.Sprintf("%s += read%d\n", offsetExpression, fieldIndex)
-	return code, ""
-}
-
-func generateParserForStruct(chunks []structChunk, name string) string {
-	var finalCode string
-
-	body, additionalArgs := "n := 0\n", []string{}
-	returnVars := fmt.Sprintf("%s{}, 0", name)
-	for j, chunk := range chunks {
-		code, args := chunk.generateParser(j, "data", returnVars, "n")
-		body += code + "\n"
-		if args != "" {
-			additionalArgs = append(additionalArgs, args)
-		}
-	}
-
-	finalCode += fmt.Sprintf(`func parse%s(data []byte, %s) (%s, int, error) {
-		var out %s
-		%s
-		return out, n, nil
-	}
-	
-	`, strings.Title(name), strings.Join(additionalArgs, ","), name, name, body)
-
-	return finalCode
-}
-
-// ------------------------------------- V2 -------------------------------------
+// func (vs namedTypeField) generateParser(fieldIndex int, srcVar, returnVars, offsetExpression string) (code string, args string) {
+// 	code = fmt.Sprintf(` var (
+// 		read%d int
+// 		err%d error
+// 	)
+// 	out.%s, read%d, err%d = parse%s(%s[%s:])
+// 	if err%d != nil {
+// 		return %s,  err%d
+// 	}
+// 	`, fieldIndex, fieldIndex, vs.field.Name(), fieldIndex, fieldIndex,
+// 		strings.Title(vs.name), srcVar, offsetExpression, fieldIndex, returnVars, fieldIndex)
+// 	code += fmt.Sprintf("%s += read%d\n", offsetExpression, fieldIndex)
+// 	return code, ""
+// }
 
 // instruction to check the length of <sliceName>
 // the `codeContext` is used to generate the proper error return statement,
@@ -259,7 +115,7 @@ func conditionalLengthCheck(args conditionalLength, cc codeContext) string {
 // and assigns it to `byteSubSliceName`
 // Also updates the codeContext.byteSliceName
 func (cc *codeContext) subSlice(byteSubSliceName string) string {
-	out := fmt.Sprintf("%s := %s[%s:]", byteSubSliceName, cc.byteSliceName, cc.offsetName)
+	out := fmt.Sprintf("%s := %s[%s:]", byteSubSliceName, cc.byteSliceName, cc.offsetExpr)
 	cc.byteSliceName = byteSubSliceName
 	return out
 }
@@ -269,64 +125,102 @@ func updateOffset(size int, cc codeContext) string { return updateOffsetExpr(str
 
 // offset += <expr>
 func updateOffsetExpr(size string, cc codeContext) string {
-	return fmt.Sprintf("%s += %s", cc.offsetName, size)
+	return fmt.Sprintf("%s += %s", cc.offsetExpr, size)
 }
 
 // --------------------------- fixed size types ---------------------------
 
-func (wc withConstructor) mustParser(cc codeContext, fieldName string, offset int) string {
-	readCode := readBasicType(cc.byteSliceName, wc.size_, offset)
+func (wc withConstructor) mustParser(cc codeContext, selector string) string {
+	readCode := readBasicType(cc.byteSliceName, wc.size_, cc.offsetExpr)
 
 	if wc.isMethod {
-		return fmt.Sprintf("%s.fromUint(%s)", cc.variableExpr(fieldName), readCode)
+		return fmt.Sprintf("%s.fromUint(%s)", cc.variableExpr(selector), readCode)
 	}
-	return fmt.Sprintf("%s = %sFromUint(%s)", cc.variableExpr(fieldName), wc.name_, readCode)
+	return fmt.Sprintf("%s = %sFromUint(%s)", cc.variableExpr(selector), wc.name_, readCode)
 }
 
-func (bt basicType) mustParser(cc codeContext, fieldName string, offset int) string {
-	readCode := readBasicType(cc.byteSliceName, bt.size(), offset)
+func (bt basicType) mustParser(cc codeContext, selector string) string {
+	readCode := readBasicType(cc.byteSliceName, bt.size(), cc.offsetExpr)
 
 	constructor := bt.name()
-	return fmt.Sprintf("%s = %s(%s)", cc.variableExpr(fieldName), constructor, readCode)
+	return fmt.Sprintf("%s = %s(%s)", cc.variableExpr(selector), constructor, readCode)
 }
 
-func (structLayout) mustParser(cc codeContext, fieldName string, offset int) string {
-	return fmt.Sprintf("%s.mustParse(%s[%d:])", cc.variableExpr(fieldName), cc.byteSliceName, offset)
+func (structLayout) mustParser(cc codeContext, selector string) string {
+	return fmt.Sprintf("%s.mustParse(%s[%s:])", cc.variableExpr(selector), cc.byteSliceName, cc.offsetExpr)
 }
 
-func (of offset) mustParser(cc codeContext, fieldName string, offset int) string {
-	readCode := readBasicType(cc.byteSliceName, of.size_, offset)
-	return fmt.Sprintf("offsetTo%s := int(%s)", strings.Title(fieldName), readCode)
+func (of offset) mustParser(cc codeContext, selector string) string {
+	readCode := readBasicType(cc.byteSliceName, of.size_, cc.offsetExpr)
+	return fmt.Sprintf("%s := int(%s)", of.offsetVariableName(selector), readCode)
 }
 
 // returns the reading instructions, without bounds check
 // it can be used for example when parsing a slice of such fields
 // note that offset are not resolved (only an offset variable is generated)
 func (fs fixedSizeList) mustParser(cc codeContext) []string {
-	type fixedSizeField interface {
-		mustParser(cc codeContext, fieldName string, offset int) string
-	}
-	var (
-		_ fixedSizeField = withConstructor{}
-		_ fixedSizeField = basicType{}
-		_ fixedSizeField = structLayout{}
-		_ fixedSizeField = offset{}
-	)
-
 	code := []string{
 		fmt.Sprintf("_ = %s[%d] // early bound checking", cc.byteSliceName, fs.size()-1),
 	}
 
 	pos := 0
 	for _, field := range fs {
-		ty := field.type_.(fixedSizeField)
-		code = append(code, ty.mustParser(cc, field.name, pos))
+		ty := field.type_
 
-		fieldSize, _ := field.type_.staticSize()
+		cc.offsetExpr = strconv.Itoa(pos) // adjust the offset
+		code = append(code, ty.mustParser(cc, field.name))
+
+		fieldSize, _ := ty.staticSize()
 		pos += fieldSize
 	}
 
 	return code
+}
+
+// return the mustParse function and the body of the parse function
+func (fs fixedSizeList) mustParserFunction(cc codeContext) (mustParse string, parseBody []string) {
+	mustParseBody := fs.mustParser(cc)
+
+	mustParse = fmt.Sprintf(`func (%s *%s) mustParse(%s []byte) {
+		%s
+	}
+	`, cc.objectName, cc.typeName, cc.byteSliceName, strings.Join(mustParseBody, "\n"))
+
+	// for parse: check length and call mustParse
+	check := staticLengthCheck(fs.size(), cc)
+	mustParseCall := fmt.Sprintf("%s.mustParse(%s)", cc.objectName, cc.byteSliceName)
+	offset := updateOffset(fs.size(), cc)
+
+	parseBody = []string{
+		check,
+		mustParseCall,
+		offset,
+	}
+
+	return mustParse, parseBody
+}
+
+// handle the parsing of the data pointed to by the offset
+func (off offset) targetParser(cc codeContext, fieldName string) []string {
+	offsetVariable := off.offsetVariableName(fieldName)
+
+	check := affineLengthCheck(affine{offsetExpr: offsetVariable}, cc)
+	// TODO:
+
+	return []string{check}
+}
+
+func (fs fixedSizeList) offsetTargetsParser(cc codeContext) (out []string) {
+	for _, field := range fs {
+		off, isOffset := field.type_.(offset)
+		if !isOffset {
+			continue
+		}
+
+		out = append(out, off.targetParser(cc, field.name)...)
+	}
+
+	return out
 }
 
 func (fs fixedSizeList) parser(cc codeContext) []string {
@@ -336,12 +230,17 @@ func (fs fixedSizeList) parser(cc codeContext) []string {
 
 	size := fs.size()
 
+	// offset are relative to the whole slice, not the subslice
+	targets := fs.offsetTargetsParser(cc)
+
 	out := []string{
 		"{",
 		cc.subSlice("subSlice"),
 		staticLengthCheck(size, cc),
 	}
 	out = append(out, fs.mustParser(cc)...)
+	out = append(out, "\n")
+	out = append(out, targets...)
 	out = append(out,
 		updateOffset(size, cc),
 		"}",
@@ -350,4 +249,76 @@ func (fs fixedSizeList) parser(cc codeContext) []string {
 	// TODO: hande offset fields
 
 	return out
+}
+
+func (sl slice) externalLengthVariable(fieldName string) string {
+	return strings.ToLower(fieldName) + "Length"
+}
+
+func (sl slice) requiredArgs(fieldName string) []string {
+	if sl.sizeLen == 0 { // provided as function argument
+		return []string{sl.externalLengthVariable(fieldName) + " int"}
+	}
+	return nil
+}
+
+func (sl slice) mustParser(cc codeContext, dstSelector string) string {
+	panic("slice are supported as child type")
+}
+
+func (sl slice) parser(cc codeContext, fieldName string) []string {
+	out := []string{
+		"{",
+		cc.subSlice("subSlice"),
+	}
+
+	lengthName := "arrayLength"
+	if sl.sizeLen == 0 {
+		lengthName = sl.externalLengthVariable(fieldName)
+	}
+	elementSize, _ := sl.element.staticSize()
+
+	// step 1 : read the array length, if written in the start of the array
+	if sl.sizeLen != 0 {
+		out = append(out,
+			affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen)}, cc))
+		out = append(out,
+			fmt.Sprintf("%s := int(%s)\n", lengthName, readBasicType(cc.byteSliceName, sl.sizeLen, "")))
+	}
+
+	// step 2 : check the expected length
+	out = append(out,
+		affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen), lengthName: lengthName, elementSize: elementSize}, cc))
+
+	// step 3 : allocate the slice - it is garded by the check above
+	out = append(out, fmt.Sprintf("%s.%s = make([]%s, %s)", cc.objectName, fieldName, sl.element.name(), lengthName))
+
+	// step 4 : loop to parse every elements
+	offset := cc.offsetExpr
+	cc.offsetExpr = fmt.Sprintf("%d + i * %d", sl.sizeLen, elementSize)
+	loopBody := sl.element.mustParser(cc, fmt.Sprintf("%s[i]", fieldName))
+	out = append(out, fmt.Sprintf(`for i := range %s.%s {
+		%s
+	}
+	`, cc.objectName, fieldName, loopBody))
+
+	// step 5 : update the offset and close the scope
+	out = append(out,
+		fmt.Sprintf("%s += %d +  %s * %d", offset, sl.sizeLen, lengthName, elementSize),
+		"}",
+	)
+
+	return out
+}
+
+func (sf standaloneField) parser(cc codeContext) []string {
+	switch ty := sf.type_.(type) {
+	case slice:
+		return ty.parser(cc, sf.name)
+	case structLayout:
+		// TODO: call the approriate function, with args
+		return nil
+	default:
+		panic(fmt.Sprintf("not handled yet %T", sf.type_))
+	}
 }

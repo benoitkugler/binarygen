@@ -16,8 +16,9 @@ func Generate(path string) error {
 		return err
 	}
 
-	// code := an.generateCode()
-	code := an.generateCode2()
+	an.performAnalysis()
+
+	code := an.generateCode()
 
 	outfile := filepath.Join(filepath.Dir(path), "binary.go")
 	content := []byte(fmt.Sprintf(`
@@ -39,69 +40,19 @@ func Generate(path string) error {
 }
 
 func (an *analyser) generateCode() string {
-	code := ""
-
 	var keys []string
-	for k := range an.structDefs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		code += an.generateCodeForStruct(an.structDefs[k]) + "\n"
-	}
-
-	return code
-}
-
-func (an *analyser) generateCode2() string {
-	var keys []string
-	for k := range an.structDefs {
+	for k := range an.structLayouts {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	code := ""
 	for _, k := range keys {
-		v := an.structDefs[k]
-		st := an.analyzeStruct(v)
+		st := an.structLayouts[k]
 		code += st.generateParser() + "\n"
 	}
 
 	return code
-}
-
-func (an *analyser) generateCodeForStruct(str structDef) string {
-	chunks := an.analyseStruct(str)
-
-	// important special case : all fields have fixed size
-	if len(chunks) == 1 {
-		if fs, ok := chunks[0].(fixedSizeFields); ok {
-			// add a mustParse version and use it in parse
-			parserCode := fs.generateMustParser("data")
-			finalCode := fmt.Sprintf(`func (out *%s) mustParse(data []byte) {
-			%s}
-			
-			`, str.name, parserCode)
-			finalCode += fs.generateParserUnique(str.name)
-
-			// write
-
-			body := fs.generateWriter("data", "item")
-			finalCode += fmt.Sprintf(`func (item %s) writeTo(data []byte) {
-				%s}
-				
-			`, str.name, body)
-			finalCode += fs.generateAppenderUnique(str.name)
-
-			return finalCode
-		}
-	}
-
-	// general case
-	finalCode := generateParserForStruct(chunks, str.name)
-	finalCode += generateAppenderForStruct(chunks, str.name)
-	return finalCode
 }
 
 // ----------------------------- V2 -----------------------------
@@ -111,7 +62,7 @@ type codeContext struct {
 	typeName      string // the name of the type being generated
 	objectName    string // the go struct being parsed or dumped
 	byteSliceName string // the name of the []byte being read or written
-	offsetName    string // the name of the variable holding the current offset
+	offsetExpr    string // the name of the variable holding the current offset or a number
 }
 
 func (cc codeContext) returnError(errVariable string) string {
@@ -121,6 +72,16 @@ func (cc codeContext) returnError(errVariable string) string {
 // return <object>.<field>
 func (cc codeContext) variableExpr(field string) string {
 	return fmt.Sprintf("%s.%s", cc.objectName, field)
+}
+
+func (cc codeContext) parseFunction(args, body []string) string {
+	return fmt.Sprintf(`func parse%s(%s) (%s, int, error) {
+		var %s %s
+		%s
+		return %s, n, nil
+	}
+	`, strings.Title(cc.typeName), strings.Join(args, ","), cc.typeName, cc.objectName,
+		cc.typeName, strings.Join(body, "\n"), cc.objectName)
 }
 
 // one or many field whose parsing (or writting)
@@ -140,44 +101,68 @@ type group interface {
 
 // group definition
 
-// TODO:
+// func requiredArgs(fields []structField) []string {
 
-func (fixedSizeList) requiredArgs() []string { return nil }
+// }
+
+func (fixedSizeList) requiredArgs() []string {
+	// TODO:
+	return nil
+}
+
+func (sf standaloneField) requiredArgs() []string {
+	switch ty := sf.type_.(type) {
+	case slice:
+		return ty.requiredArgs(sf.name)
+	case structLayout:
+		// TODO: call the approriate function, with args
+		return nil
+	default:
+		panic(fmt.Sprintf("not handled yet %T", sf.type_))
+	}
+}
 
 func (fixedSizeList) appender(cc codeContext) []string { return nil }
 
+// non fixed fields, like slice or structs containing slices or offsets
 type standaloneField structField
-
-func (standaloneField) requiredArgs() []string { return nil }
-
-func (standaloneField) parser(cc codeContext) []string { return nil }
 
 func (standaloneField) appender(cc codeContext) []string { return nil }
 
 func (st structLayout) generateParser() string {
 	groups := st.groups()
+	if len(groups) == 0 {
+		return ""
+	}
 
 	context := codeContext{
-		typeName:      st.name,
+		typeName:      st.name_,
 		objectName:    "item",
 		byteSliceName: "src",
-		offsetName:    "n",
+		offsetExpr:    "n",
 	}
-	chunks, args := []string{"n := 0"}, []string{fmt.Sprintf("%s []byte", context.byteSliceName)}
+
+	body, args := []string{"n := 0"}, []string{fmt.Sprintf("%s []byte", context.byteSliceName)}
+
+	// important special case : all fields have fixed size
+	// with no offset
+	_, isStaticSize := st.staticSize()
+	if fs, isFixedSize := groups[0].(fixedSizeList); len(groups) == 1 && isFixedSize && isStaticSize {
+		mustParse, parseBody := fs.mustParserFunction(context)
+		args = append(args, fs.requiredArgs()...)
+		body = append(body, parseBody...)
+
+		finalCode := mustParse + "\n\n" + context.parseFunction(args, body)
+
+		return finalCode
+	}
 
 	for _, group := range groups {
-		chunks = append(chunks, group.parser(context)...)
+		body = append(body, group.parser(context)...)
 		args = append(args, group.requiredArgs()...)
 	}
 
-	finalCode := fmt.Sprintf(`func parse%s(%s) (%s, int, error) {
-		var %s %s
-		%s
-		return %s, n, nil
-	}
-	
-	`, strings.Title(st.name), strings.Join(args, ","), st.name, context.objectName,
-		st.name, strings.Join(chunks, "\n"), context.objectName)
+	finalCode := context.parseFunction(args, body)
 
 	return finalCode
 }

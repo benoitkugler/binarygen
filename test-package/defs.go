@@ -92,7 +92,7 @@ func fl1616ToUint(f fl1616) uint32 {
 
 type withOffset struct {
 	version        uint16
-	offsetToSlice  []uint64 `offset-size:"32"`
+	offsetToSlice  []uint64 `offset-size:"32" len-size:"16"`
 	offsetToStruct lookup   `offset-size:"32"`
 	a, b, c        byte
 }
