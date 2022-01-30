@@ -283,7 +283,7 @@ func (sl slice) parser(cc codeContext, fieldName string) []string {
 		out = append(out,
 			affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen)}, cc))
 		out = append(out,
-			fmt.Sprintf("%s := int(%s)\n", lengthName, readBasicType(cc.byteSliceName, sl.sizeLen, "")))
+			fmt.Sprintf("%s := int(%s)", lengthName, readBasicType(cc.byteSliceName, sl.sizeLen, "")))
 	}
 
 	// step 2 : check the expected length
@@ -291,7 +291,7 @@ func (sl slice) parser(cc codeContext, fieldName string) []string {
 		affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen), lengthName: lengthName, elementSize: elementSize}, cc))
 
 	// step 3 : allocate the slice - it is garded by the check above
-	out = append(out, fmt.Sprintf("%s.%s = make([]%s, %s)", cc.objectName, fieldName, sl.element.name(), lengthName))
+	out = append(out, fmt.Sprintf("%s.%s = make([]%s, %s) // allocation guarded by the previous check", cc.objectName, fieldName, sl.element.name(), lengthName))
 
 	// step 4 : loop to parse every elements
 	offset := cc.offsetExpr
