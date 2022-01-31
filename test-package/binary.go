@@ -215,6 +215,15 @@ func parseComposed2(src []byte) (composed2, int, error) {
 
 		n += 3
 	}
+	{
+		var read int
+		var err error
+		item.embeded, read, err = parseEmbeded(src[n:])
+		if err != nil {
+			return composed2{}, 0, err
+		}
+		n += read
+	}
 	return item, n, nil
 }
 
@@ -335,6 +344,21 @@ func parseSimpleSubtable(src []byte) (simpleSubtable, int, error) {
 	return item, n, nil
 }
 
+func parseVarInstanceContainer(src []byte, coordsLength int, coords2Length int) (varInstanceContainer, int, error) {
+	var item varInstanceContainer
+	n := 0
+	{
+		var read int
+		var err error
+		item.inst, read, err = parseVarInstance(src[n:], coordsLength, coords2Length)
+		if err != nil {
+			return varInstanceContainer{}, 0, err
+		}
+		n += read
+	}
+	return item, n, nil
+}
+
 func parseWithOffset(src []byte) (withOffset, int, error) {
 	var item withOffset
 	n := 0
@@ -352,15 +376,34 @@ func parseWithOffset(src []byte) (withOffset, int, error) {
 		item.b = byte(subSlice[11])
 		item.c = byte(subSlice[12])
 
+		n += 13
 		if L := len(src); L < offsetToOffsetToSlice {
 			return withOffset{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", offsetToOffsetToSlice, L)
 		}
 
+		{
+			subSlice := src[offsetToOffsetToSlice:]
+			if L := len(subSlice); L < 2 {
+				return withOffset{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", 2, L)
+			}
+
+			arrayLength := int(binary.BigEndian.Uint16(subSlice[:]))
+			if L := len(subSlice); L < 2+arrayLength*8 {
+				return withOffset{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", 2+arrayLength*8, L)
+			}
+
+			item.offsetToSlice = make([]uint64, arrayLength) // allocation guarded by the previous check
+			for i := range item.offsetToSlice {
+				item.offsetToSlice[i] = uint64(binary.BigEndian.Uint64(subSlice[2+i*8:]))
+			}
+
+			offsetToOffsetToSlice += 2 + arrayLength*8
+		}
 		if L := len(src); L < offsetToOffsetToStruct {
 			return withOffset{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", offsetToOffsetToStruct, L)
 		}
 
-		n += 13
+		item.offsetToStruct.mustParse(src[offsetToOffsetToStruct:])
 	}
 	return item, n, nil
 }

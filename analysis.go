@@ -294,12 +294,6 @@ func sizeFromTag(tag string) int {
 	}
 }
 
-// variable size struct
-type namedTypeField struct {
-	field *types.Var
-	name  string
-}
-
 type fieldType interface {
 	staticSize() (int, bool)
 	name() string
@@ -346,10 +340,16 @@ type slice struct {
 	sizeLen int
 }
 
+func (sl slice) requiredArgs(fieldName string) []argument {
+	if sl.sizeLen == 0 { // provided as function argument
+		return []argument{{sl.externalLengthVariable(fieldName), "int"}}
+	}
+	return nil
+}
+
 type structField struct {
 	type_ fieldType
-	// astDecl ast.Expr // used to detect aliases
-	name string // name of the field
+	name  string // name of the field
 }
 
 // structLayout is the result of the analysis of a Go struct
@@ -384,6 +384,18 @@ func (sl structLayout) groups() (out []group) {
 	}
 
 	return out
+}
+
+func (st structLayout) requiredArgs() (args []argument) {
+	for _, field := range st.fields {
+		switch ty := field.type_.(type) {
+		case slice:
+			args = append(args, ty.requiredArgs(field.name)...)
+		case structLayout: // recurse
+			args = append(args, ty.requiredArgs()...)
+		}
+	}
+	return args
 }
 
 // returns `true` is the type is referenced in other types
@@ -499,6 +511,15 @@ func (an *analyser) analyzeStruct(str structDef) (out structLayout) {
 	}
 
 	return out
+}
+
+// additional arguments required by the parsing and writing functions
+type argument struct {
+	variableName, typeName string
+}
+
+func (arg argument) asSignature() string {
+	return fmt.Sprintf("%s %s", arg.variableName, arg.typeName)
 }
 
 // groups

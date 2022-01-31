@@ -10,6 +10,10 @@ type VarInstance struct {
 	PSStringID uint16 `bin:"optional"`
 }
 
+type varInstanceContainer struct {
+	inst VarInstance
+}
+
 type lookup struct {
 	a, b, c int32
 	d       uint32

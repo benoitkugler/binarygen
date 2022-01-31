@@ -87,9 +87,6 @@ func (cc codeContext) parseFunction(args, body []string) string {
 // one or many field whose parsing (or writting)
 // is grouped to reduce length checks and allocations
 type group interface {
-	// return an (optional) slice of arguments to add to the parse and appendTo functions
-	requiredArgs() []string
-
 	// returns the code blocks
 	// no trailing new line is required
 	parser(cc codeContext) []string
@@ -100,27 +97,6 @@ type group interface {
 }
 
 // group definition
-
-// func requiredArgs(fields []structField) []string {
-
-// }
-
-func (fixedSizeList) requiredArgs() []string {
-	// TODO:
-	return nil
-}
-
-func (sf standaloneField) requiredArgs() []string {
-	switch ty := sf.type_.(type) {
-	case slice:
-		return ty.requiredArgs(sf.name)
-	case structLayout:
-		// TODO: call the approriate function, with args
-		return nil
-	default:
-		panic(fmt.Sprintf("not handled yet %T", sf.type_))
-	}
-}
 
 func (fixedSizeList) appender(cc codeContext) []string { return nil }
 
@@ -144,12 +120,15 @@ func (st structLayout) generateParser() string {
 
 	body, args := []string{"n := 0"}, []string{fmt.Sprintf("%s []byte", context.byteSliceName)}
 
+	for _, arg := range st.requiredArgs() {
+		args = append(args, arg.asSignature())
+	}
+
 	// important special case : all fields have fixed size
 	// with no offset
 	_, isStaticSize := st.staticSize()
 	if fs, isFixedSize := groups[0].(fixedSizeList); len(groups) == 1 && isFixedSize && isStaticSize {
 		mustParse, parseBody := fs.mustParserFunction(context)
-		args = append(args, fs.requiredArgs()...)
 		body = append(body, parseBody...)
 
 		finalCode := mustParse + "\n\n" + context.parseFunction(args, body)
@@ -159,7 +138,6 @@ func (st structLayout) generateParser() string {
 
 	for _, group := range groups {
 		body = append(body, group.parser(context)...)
-		args = append(args, group.requiredArgs()...)
 	}
 
 	finalCode := context.parseFunction(args, body)

@@ -205,9 +205,11 @@ func (off offset) targetParser(cc codeContext, fieldName string) []string {
 	offsetVariable := off.offsetVariableName(fieldName)
 
 	check := affineLengthCheck(affine{offsetExpr: offsetVariable}, cc)
-	// TODO:
 
-	return []string{check}
+	cc.offsetExpr = offsetVariable
+	parse := off.target.mustParser(cc, fieldName)
+
+	return []string{check, parse}
 }
 
 func (fs fixedSizeList) offsetTargetsParser(cc codeContext) (out []string) {
@@ -239,14 +241,9 @@ func (fs fixedSizeList) parser(cc codeContext) []string {
 		staticLengthCheck(size, cc),
 	}
 	out = append(out, fs.mustParser(cc)...)
-	out = append(out, "\n")
+	out = append(out, "\n", updateOffset(size, cc))
 	out = append(out, targets...)
-	out = append(out,
-		updateOffset(size, cc),
-		"}",
-	)
-
-	// TODO: hande offset fields
+	out = append(out, "}")
 
 	return out
 }
@@ -255,15 +252,8 @@ func (sl slice) externalLengthVariable(fieldName string) string {
 	return strings.ToLower(fieldName) + "Length"
 }
 
-func (sl slice) requiredArgs(fieldName string) []string {
-	if sl.sizeLen == 0 { // provided as function argument
-		return []string{sl.externalLengthVariable(fieldName) + " int"}
-	}
-	return nil
-}
-
 func (sl slice) mustParser(cc codeContext, dstSelector string) string {
-	panic("slice are supported as child type")
+	return strings.Join(sl.parser(cc, dstSelector), "\n")
 }
 
 func (sl slice) parser(cc codeContext, fieldName string) []string {
@@ -316,8 +306,22 @@ func (sf standaloneField) parser(cc codeContext) []string {
 	case slice:
 		return ty.parser(cc, sf.name)
 	case structLayout:
-		// TODO: call the approriate function, with args
-		return nil
+		var args []string
+		for _, arg := range ty.requiredArgs() {
+			args = append(args, arg.variableName)
+		}
+		return []string{
+			"{",
+			"var read int",
+			"var err error",
+			fmt.Sprintf("%s, read, err = parse%s(%s[%s:], %s)", cc.variableExpr(sf.name), strings.Title(ty.name_),
+				cc.byteSliceName, cc.offsetExpr, strings.Join(args, ", ")),
+			"if err != nil {",
+			cc.returnError("err"),
+			"}",
+			updateOffsetExpr("read", cc),
+			"}",
+		}
 	default:
 		panic(fmt.Sprintf("not handled yet %T", sf.type_))
 	}
