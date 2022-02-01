@@ -100,10 +100,7 @@ type group interface {
 
 func (fixedSizeList) appender(cc codeContext) []string { return nil }
 
-// non fixed fields, like slice or structs containing slices or offsets
-type standaloneField structField
-
-func (standaloneField) appender(cc codeContext) []string { return nil }
+func (structField) appender(cc codeContext) []string { return nil }
 
 func (st structLayout) generateParser() string {
 	groups := st.groups()

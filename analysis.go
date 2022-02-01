@@ -298,9 +298,9 @@ type fieldType interface {
 	staticSize() (int, bool)
 	name() string
 
-	// parser expression, with no bounds check
-	// <objectName>.<dstSelector> = mustParse(<byteSliceName[<offsetName>:])
-	mustParser(cc codeContext, dstSelector string) string
+	// parser expression, with bounds check
+	// <objectName>.<dstSelector>, read, err = parse(<byteSliceName[<offsetName>:])
+	parser(cc codeContext, dstSelector string) []string
 }
 
 func (of offset) name() string          { return of.target.name() }
@@ -308,6 +308,18 @@ func (wc withConstructor) name() string { return wc.name_ }
 func (bt basicType) name() string       { return bt.name_ }
 func (sl slice) name() string           { return "[]" + sl.element.name() }
 func (sl structLayout) name() string    { return sl.name_ }
+
+func (of offset) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, of, cc)
+}
+
+func (wc withConstructor) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, wc, cc)
+}
+
+func (bt basicType) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, bt, cc)
+}
 
 func (of offset) staticSize() (int, bool)          { return of.size_, true }
 func (wc withConstructor) staticSize() (int, bool) { return wc.size_, true }
@@ -334,9 +346,15 @@ func (sl structLayout) staticSize() (int, bool) {
 	return totalSize, true
 }
 
+type fixedFieldType interface {
+	fieldType
+
+	mustParser(cc codeContext, dstSelector string) string
+}
+
 // []<element> slice type
 type slice struct {
-	element fieldType
+	element fixedFieldType
 	sizeLen int
 }
 
@@ -363,7 +381,8 @@ type structLayout struct {
 func (sl structLayout) groups() (out []group) {
 	var fixedSize fixedSizeList
 	for _, field := range sl.fields {
-		if _, isFixedSize := field.type_.staticSize(); isFixedSize {
+		_, hasFixedType := field.type_.(fixedFieldType)
+		if _, isFixedSize := field.type_.staticSize(); isFixedSize && hasFixedType {
 			fixedSize = append(fixedSize, field)
 			continue
 		}
@@ -375,7 +394,7 @@ func (sl structLayout) groups() (out []group) {
 		}
 
 		// and add a standalone field
-		out = append(out, standaloneField(field))
+		out = append(out, field)
 	}
 
 	// close the current fixedSize array if needed
@@ -468,11 +487,12 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 
 		tags.lenSize = ""
 		fieldElement := an.handleFieldType(fieldType.Elem(), tags, sliceElement(typeDecl))
-		if fieldElement == nil {
+		elementTyp, ok := fieldElement.(fixedFieldType)
+		if !ok {
 			panic("slice of variable length element are not supported")
 		}
 
-		sl.element = fieldElement
+		sl.element = elementTyp
 		sl.sizeLen = size
 
 		return sl, true

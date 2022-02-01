@@ -403,7 +403,15 @@ func parseWithOffset(src []byte) (withOffset, int, error) {
 			return withOffset{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", offsetToOffsetToStruct, L)
 		}
 
-		item.offsetToStruct.mustParse(src[offsetToOffsetToStruct:])
+		{
+			var read int
+			var err error
+			item.offsetToStruct, read, err = parseLookup(src[offsetToOffsetToStruct:])
+			if err != nil {
+				return withOffset{}, 0, err
+			}
+			offsetToOffsetToStruct += read
+		}
 	}
 	return item, n, nil
 }

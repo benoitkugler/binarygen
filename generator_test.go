@@ -22,7 +22,7 @@ func Test_importSource(t *testing.T) {
 	an.performAnalysis()
 
 	obj := an.structDefs
-	if len(obj) != 9 {
+	if len(obj) != 10 {
 		t.Fatal("unexpected number of struct definitions:", len(obj))
 	}
 

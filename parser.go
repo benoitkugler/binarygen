@@ -165,7 +165,7 @@ func (fs fixedSizeList) mustParser(cc codeContext) []string {
 
 	pos := 0
 	for _, field := range fs {
-		ty := field.type_
+		ty := field.type_.(fixedFieldType)
 
 		cc.offsetExpr = strconv.Itoa(pos) // adjust the offset
 		code = append(code, ty.mustParser(cc, field.name))
@@ -207,9 +207,9 @@ func (off offset) targetParser(cc codeContext, fieldName string) []string {
 	check := affineLengthCheck(affine{offsetExpr: offsetVariable}, cc)
 
 	cc.offsetExpr = offsetVariable
-	parse := off.target.mustParser(cc, fieldName)
+	parse := off.target.parser(cc, fieldName)
 
-	return []string{check, parse}
+	return append([]string{check}, parse...)
 }
 
 func (fs fixedSizeList) offsetTargetsParser(cc codeContext) (out []string) {
@@ -250,10 +250,6 @@ func (fs fixedSizeList) parser(cc codeContext) []string {
 
 func (sl slice) externalLengthVariable(fieldName string) string {
 	return strings.ToLower(fieldName) + "Length"
-}
-
-func (sl slice) mustParser(cc codeContext, dstSelector string) string {
-	return strings.Join(sl.parser(cc, dstSelector), "\n")
 }
 
 func (sl slice) parser(cc codeContext, fieldName string) []string {
@@ -301,28 +297,31 @@ func (sl slice) parser(cc codeContext, fieldName string) []string {
 	return out
 }
 
-func (sf standaloneField) parser(cc codeContext) []string {
-	switch ty := sf.type_.(type) {
-	case slice:
-		return ty.parser(cc, sf.name)
-	case structLayout:
-		var args []string
-		for _, arg := range ty.requiredArgs() {
-			args = append(args, arg.variableName)
-		}
-		return []string{
-			"{",
-			"var read int",
-			"var err error",
-			fmt.Sprintf("%s, read, err = parse%s(%s[%s:], %s)", cc.variableExpr(sf.name), strings.Title(ty.name_),
-				cc.byteSliceName, cc.offsetExpr, strings.Join(args, ", ")),
-			"if err != nil {",
-			cc.returnError("err"),
-			"}",
-			updateOffsetExpr("read", cc),
-			"}",
-		}
-	default:
-		panic(fmt.Sprintf("not handled yet %T", sf.type_))
+// add the bound checks
+func parserForFixedSize(fieldName string, ty fixedFieldType, cc codeContext) []string {
+	ls := fixedSizeList{{name: fieldName, type_: ty}}
+	return ls.parser(cc)
+}
+
+func (st structLayout) parser(cc codeContext, dstSelector string) []string {
+	var args []string
+	for _, arg := range st.requiredArgs() {
+		args = append(args, arg.variableName)
 	}
+	return []string{
+		"{",
+		"var read int",
+		"var err error",
+		fmt.Sprintf("%s, read, err = parse%s(%s[%s:], %s)", cc.variableExpr(dstSelector), strings.Title(st.name_),
+			cc.byteSliceName, cc.offsetExpr, strings.Join(args, ", ")),
+		"if err != nil {",
+		cc.returnError("err"),
+		"}",
+		updateOffsetExpr("read", cc),
+		"}",
+	}
+}
+
+func (st structField) parser(cc codeContext) []string {
+	return st.type_.parser(cc, st.name)
 }
