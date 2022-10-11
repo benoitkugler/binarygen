@@ -8,6 +8,18 @@ import (
 
 // generated code - parser
 
+func (of offset) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, of, cc)
+}
+
+func (wc withConstructor) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, wc, cc)
+}
+
+func (bt basicType) parser(cc codeContext, dstSelector string) []string {
+	return parserForFixedSize(dstSelector, bt, cc)
+}
+
 // do not perform bounds check
 func readBasicType(sliceName string, size int, offset string) string {
 	switch size {
@@ -70,8 +82,12 @@ func affineLengthCheck(args affine, cc codeContext) string {
 	if args.offsetExpr != "" && args.offsetExpr != "0" {
 		lengthExpr += args.offsetExpr
 	}
-	if args.elementSize != 0 && args.lengthName != "" {
-		lengthExpr += fmt.Sprintf("+ %s * %d", args.lengthName, args.elementSize)
+	if args.lengthName != "" {
+		if args.elementSize == 1 {
+			lengthExpr += fmt.Sprintf("+ %s", args.lengthName)
+		} else if args.elementSize != 0 {
+			lengthExpr += fmt.Sprintf("+ %s * %d", args.lengthName, args.elementSize)
+		}
 	}
 	errReturn := cc.returnError(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", %s, L)`, lengthExpr))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
@@ -281,7 +297,11 @@ func (sl slice) parser(cc codeContext, fieldName string) []string {
 
 	// step 4 : loop to parse every elements
 	offset := cc.offsetExpr
-	cc.offsetExpr = fmt.Sprintf("%d + i * %d", sl.sizeLen, elementSize)
+	if elementSize == 1 {
+		cc.offsetExpr = fmt.Sprintf("%d + i", sl.sizeLen)
+	} else {
+		cc.offsetExpr = fmt.Sprintf("%d + i * %d", sl.sizeLen, elementSize)
+	}
 	loopBody := sl.element.mustParser(cc, fmt.Sprintf("%s[i]", fieldName))
 	out = append(out, fmt.Sprintf(`for i := range %s.%s {
 		%s
@@ -324,4 +344,28 @@ func (st structLayout) parser(cc codeContext, dstSelector string) []string {
 
 func (st structField) parser(cc codeContext) []string {
 	return st.type_.parser(cc, st.name)
+}
+
+func (u union) parser(cc codeContext, dstSelector string) []string {
+	var cases []string
+	for i, flag := range u.flags {
+		cases = append(cases, fmt.Sprintf(`case %s :
+		%s, read, err = parse%s(%s[%s:], %s)`,
+			flag.Name(), cc.variableExpr(dstSelector), strings.Title(u.members[i].name()), cc.byteSliceName,
+			cc.offsetExpr, "", // TODO: if needed handle args
+		))
+	}
+	return []string{
+		"{",
+		"var read int",
+		"var err error",
+		fmt.Sprintf("switch %s {", cc.variableExpr(u.flagFieldName)),
+		strings.Join(cases, "\n"),
+		"}",
+		"if err != nil {",
+		cc.returnError("err"),
+		"}",
+		updateOffsetExpr("read", cc),
+		"}",
+	}
 }

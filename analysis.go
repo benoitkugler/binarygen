@@ -3,6 +3,7 @@ package binarygen
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
 	"go/types"
 	"path/filepath"
@@ -17,8 +18,10 @@ type analyser struct {
 	ast   *ast.File    // file containing types declaration
 	fset  *token.FileSet
 
-	structDefs    map[string]structDef    // by name, filled by fetchStructs()
-	structLayouts map[string]structLayout // by name, filled by the analysis
+	unionTags     map[string][]*types.Const           // tags for each interface name
+	interfaces    map[*types.Interface][]*types.Named // members for each interface
+	structDefs    map[string]structDef                // by name, filled by fetchStructs()
+	structLayouts map[string]structLayout             // by name, filled by the analysis
 
 	pkgName, filePath string
 }
@@ -62,6 +65,7 @@ func importSource(path string) (analyser, error) {
 type fieldTags struct {
 	lenSize    string // for array, how big is the length storage
 	offsetSize string // for data stored at an offset, how big is the offset storage
+	kindField  string // the name of the field containing the union kind
 }
 
 func newFieldTags(tag string) fieldTags {
@@ -69,6 +73,7 @@ func newFieldTags(tag string) fieldTags {
 	return fieldTags{
 		lenSize:    t.Get("len-size"),
 		offsetSize: t.Get("offset-size"),
+		kindField:  t.Get("kind-field"),
 	}
 }
 
@@ -99,6 +104,68 @@ func (an *analyser) fetchStructs() {
 				aliases:    an.fetchAliases(obj),
 			}
 			an.structDefs[name] = str
+		}
+	}
+}
+
+// look for integer constants with type <...>Kind
+// and values <...>Kind<...>
+func (an *analyser) fetchUnionFlags() {
+	an.unionTags = make(map[string][]*types.Const)
+	for _, name := range an.scope.Names() {
+		obj := an.scope.Lookup(name)
+
+		cst, isConst := obj.(*types.Const)
+		if !isConst {
+			continue
+		}
+		if cst.Val().Kind() != constant.Int {
+			continue
+		}
+
+		named, ok := cst.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+
+		if !strings.HasSuffix(named.Obj().Name(), "Kind") {
+			continue
+		}
+
+		relatedTypeName := strings.TrimSuffix(named.Obj().Name(), "Kind")
+		an.unionTags[relatedTypeName] = append(an.unionTags[relatedTypeName], cst)
+	}
+}
+
+func (an *analyser) fetchInterfaces() {
+	an.interfaces = make(map[*types.Interface][]*types.Named)
+
+	names := an.scope.Names()
+	var structs []*types.Named
+	for _, name := range names {
+		obj := an.scope.Lookup(name)
+
+		_, isStruct := obj.Type().Underlying().(*types.Struct)
+		if !isStruct {
+			continue
+		}
+
+		structs = append(structs, obj.Type().(*types.Named))
+	}
+
+	for _, name := range names {
+		obj := an.scope.Lookup(name)
+
+		itf, isItf := obj.Type().Underlying().(*types.Interface)
+		if !isItf {
+			continue
+		}
+
+		// find the members of this interface
+		for _, st := range structs {
+			if types.Implements(st, itf) {
+				an.interfaces[itf] = append(an.interfaces[itf], st)
+			}
 		}
 	}
 }
@@ -141,6 +208,8 @@ func (an *analyser) fetchAliases(obj types.Object) map[string]ast.Expr {
 
 func (an *analyser) performAnalysis() {
 	an.fetchStructs()
+	an.fetchUnionFlags()
+	an.fetchInterfaces()
 
 	an.structLayouts = make(map[string]structLayout, len(an.structDefs))
 	for k := range an.structDefs {
@@ -154,40 +223,6 @@ func typeName(ty types.Type) string {
 		return named.Obj().Name()
 	}
 	return ""
-}
-
-type withConstructor struct {
-	name_ string
-	size_ int
-
-	isMethod bool // fromUint(), toUint() vs xxxFromUint() xxxtoUint()
-}
-
-func (wc withConstructor) size() int {
-	return wc.size_
-}
-
-type basicType struct {
-	name_ string // named type
-
-	binaryLayout int // underlying
-}
-
-func (bt basicType) size() int { return bt.binaryLayout }
-
-// integer offset to the actual data
-type offset struct {
-	target fieldType
-
-	size_ int
-}
-
-func (o offset) size() int {
-	return o.size_
-}
-
-func (offset) offsetVariableName(field string) string {
-	return fmt.Sprintf("offsetTo%s", strings.Title(field))
 }
 
 const (
@@ -223,8 +258,7 @@ func (an *analyser) isAlias(typeDecl ast.Expr) *types.TypeName {
 	return nil
 }
 
-// return the new binary layout, or 0
-// if always returns 0 if ty is not a *types.Named
+// if returns false if ty is not a *types.Named
 // check for method fromUint() or function xxxFromUint()
 func (an *analyser) newWithConstructor(ty types.Type, typeDecl ast.Expr) (withConstructor, bool) {
 	layoutFromFunc := func(fnType types.Type) (int, bool) {
@@ -294,60 +328,8 @@ func sizeFromTag(tag string) int {
 	}
 }
 
-type fieldType interface {
-	staticSize() (int, bool)
-	name() string
-
-	// parser expression, with bounds check
-	// <objectName>.<dstSelector>, read, err = parse(<byteSliceName[<offsetName>:])
-	parser(cc codeContext, dstSelector string) []string
-}
-
-func (of offset) name() string          { return of.target.name() }
-func (wc withConstructor) name() string { return wc.name_ }
-func (bt basicType) name() string       { return bt.name_ }
-func (sl slice) name() string           { return "[]" + sl.element.name() }
-func (sl structLayout) name() string    { return sl.name_ }
-
-func (of offset) parser(cc codeContext, dstSelector string) []string {
-	return parserForFixedSize(dstSelector, of, cc)
-}
-
-func (wc withConstructor) parser(cc codeContext, dstSelector string) []string {
-	return parserForFixedSize(dstSelector, wc, cc)
-}
-
-func (bt basicType) parser(cc codeContext, dstSelector string) []string {
-	return parserForFixedSize(dstSelector, bt, cc)
-}
-
-func (of offset) staticSize() (int, bool)          { return of.size_, true }
-func (wc withConstructor) staticSize() (int, bool) { return wc.size_, true }
-func (bt basicType) staticSize() (int, bool)       { return bt.binaryLayout, true }
-func (sl slice) staticSize() (int, bool)           { return 0, false }
-
-// staticSize returns the statically known size of the type
-// or false if it is dynamic or requires additional length check
-func (sl structLayout) staticSize() (int, bool) {
-	totalSize := 0
-	for _, field := range sl.fields {
-		// special case for offsets : they have a static size
-		// but still require additional length check
-		if _, isOffset := field.type_.(offset); isOffset {
-			return 0, false
-		}
-
-		size, ok := field.type_.staticSize()
-		if !ok {
-			return 0, false
-		}
-		totalSize += size
-	}
-	return totalSize, true
-}
-
 type fixedFieldType interface {
-	fieldType
+	oType
 
 	mustParser(cc codeContext, dstSelector string) string
 }
@@ -366,7 +348,7 @@ func (sl slice) requiredArgs(fieldName string) []argument {
 }
 
 type structField struct {
-	type_ fieldType
+	type_ oType
 	name  string // name of the field
 }
 
@@ -423,7 +405,7 @@ func (an *analyser) isTypeReferenced(st structLayout) bool {
 	return has
 }
 
-func (an *analyser) handleFieldType(ty types.Type, tags fieldTags, astDecl ast.Expr) fieldType {
+func (an *analyser) handleFieldType(ty types.Type, tags fieldTags, astDecl ast.Expr) oType {
 	// special case for offsets
 	if s := sizeFromTag(tags.offsetSize); s != -1 {
 		// the field is an offset to the actual data
@@ -443,6 +425,12 @@ func (an *analyser) handleFieldType(ty types.Type, tags fieldTags, astDecl ast.E
 		return af
 	}
 
+	// union types
+	_, isItf := ty.Underlying().(*types.Interface)
+	if isItf {
+		return an.handleInterface(ty, tags)
+	}
+
 	// named struct
 	named, ok := ty.(*types.Named)
 	if ok {
@@ -454,7 +442,7 @@ func (an *analyser) handleFieldType(ty types.Type, tags fieldTags, astDecl ast.E
 
 // check is the underlying type as fixed size;
 // return nil if not
-func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) fieldType {
+func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) oType {
 	// first check for custom constructor
 	// if present, only the constructor type matters
 	if wc, ok := an.newWithConstructor(ty, typeDecl); ok { // overide underlying basic info
@@ -468,7 +456,7 @@ func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) fieldType 
 			name = n
 		}
 		if L, ok := getBinaryLayout(underlying); ok {
-			return basicType{name_: name, binaryLayout: L}
+			return basicType{name_: name, binarySize: L}
 		}
 	case *types.Array:
 		panic("array not supported yet")
@@ -499,6 +487,34 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 	}
 
 	return slice{}, false
+}
+
+func (an *analyser) handleInterface(ty types.Type, tags fieldTags) union {
+	itf := ty.Underlying().(*types.Interface)
+	named, ok := ty.(*types.Named)
+	if !ok {
+		panic("anonymous interfaces not supported")
+	}
+	itfName := named.Obj().Name()
+	out := union{type_: named, flagFieldName: tags.kindField}
+	flags := an.unionTags[itfName]
+	byConcreteType := map[string]*types.Const{}
+	for _, flag := range flags {
+		concreteTypeName := strings.ReplaceAll(flag.Name(), "Kind", "")
+		byConcreteType[concreteTypeName] = flag
+	}
+
+	for _, member := range an.interfaces[itf] {
+		memberName := member.Obj().Name()
+		st := an.getOrAnalyseStruct(memberName)
+		flag, ok := byConcreteType[memberName]
+		if !ok {
+			panic(fmt.Sprintf("union flag %sKind%s not defined", itfName, memberName))
+		}
+		out.members = append(out.members, st)
+		out.flags = append(out.flags, flag)
+	}
+	return out
 }
 
 func (an *analyser) getOrAnalyseStruct(typeName string) structLayout {

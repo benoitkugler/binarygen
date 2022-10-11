@@ -100,3 +100,30 @@ type withOffset struct {
 	offsetToStruct lookup   `offset-size:"32"`
 	a, b, c        byte
 }
+
+type withUnion struct {
+	version    subtableKind
+	otherField byte
+	data       subtable `kind-field:"version"`
+}
+
+type subtableKind uint16
+
+const (
+	subtableKind1 subtableKind = iota
+	subtableKind2
+)
+
+type subtable interface {
+	isSubtable()
+}
+
+type subtable1 struct {
+	F uint64
+}
+type subtable2 struct {
+	F uint8
+}
+
+func (subtable1) isSubtable() {}
+func (subtable2) isSubtable() {}
