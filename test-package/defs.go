@@ -108,16 +108,16 @@ type withOffset struct {
 }
 
 type withUnion struct {
-	version    subtableKind
+	version    subtableVersion
 	otherField byte
-	data       subtable `kind-field:"version"`
+	data       subtable `version-field:"version"`
 }
 
-type subtableKind uint16
+type subtableVersion uint16
 
 const (
-	subtableKind1 subtableKind = iota
-	subtableKind2
+	subtableVersion1 subtableVersion = iota
+	subtableVersion2
 )
 
 type subtable interface {

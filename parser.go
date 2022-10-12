@@ -396,7 +396,7 @@ func (u union) parser(cc codeContext, dstSelector string) string {
 		switch %s {
 		%s
 		default:
-			err = fmt.Errorf("unsupported %sKind %%d", %s)
+			err = fmt.Errorf("unsupported %sVersion %%d", %s)
 		}
 		if err != nil {
 			%s

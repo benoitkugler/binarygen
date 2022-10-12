@@ -18,7 +18,7 @@ type analyser struct {
 	ast   *ast.File    // file containing types declaration
 	fset  *token.FileSet
 
-	unionTags     map[string][]*types.Const           // tags for each interface name
+	unionTags     map[*types.Named][]*types.Const     // tags for each tag type
 	interfaces    map[*types.Interface][]*types.Named // members for each interface
 	structDefs    map[string]structDef                // by name, filled by fetchStructs()
 	structLayouts map[string]structLayout             // by name, filled by the analysis
@@ -68,16 +68,28 @@ type fieldTags struct {
 	// or the name of a field, or "-" when provided externally
 	len        string
 	offsetSize string // for data stored at an offset, how big is the offset storage
-	kindField  string // the name of the field containing the union kind
+
+	versionField string       // the name of the field containing the union kind
+	versionType  *types.Named // the type of the version flag
 }
 
-func newFieldTags(tag string) fieldTags {
+func newFieldTags(st *types.Struct, tag string) fieldTags {
 	t := reflect.StructTag(tag)
-	return fieldTags{
-		len:        t.Get("len"),
-		offsetSize: t.Get("offset-size"),
-		kindField:  t.Get("kind-field"),
+	out := fieldTags{
+		len:          t.Get("len"),
+		offsetSize:   t.Get("offset-size"),
+		versionField: t.Get("version-field"),
 	}
+	if out.versionField != "" {
+		for i := 0; i < st.NumFields(); i++ {
+			if fi := st.Field(i); fi.Name() == out.versionField {
+				out.versionType = fi.Type().(*types.Named)
+				return out
+			}
+		}
+		panic("unknow field " + out.versionField)
+	}
+	return out
 }
 
 // one struct definition to handle
@@ -116,10 +128,11 @@ func (an *analyser) fetchTables() {
 	}
 }
 
-// look for integer constants with type <...>Kind
-// and values <...>Kind<...>
+// look for integer constants with type <...>Version
+// and values <...>Version<v>,
+// which are mapped to concrete types <interfaceName><v>
 func (an *analyser) fetchUnionFlags() {
-	an.unionTags = make(map[string][]*types.Const)
+	an.unionTags = make(map[*types.Named][]*types.Const)
 	for _, name := range an.scope.Names() {
 		obj := an.scope.Lookup(name)
 
@@ -136,12 +149,11 @@ func (an *analyser) fetchUnionFlags() {
 			continue
 		}
 
-		if !strings.HasSuffix(named.Obj().Name(), "Kind") {
+		if !strings.HasSuffix(named.Obj().Name(), "Version") {
 			continue
 		}
 
-		relatedTypeName := strings.TrimSuffix(named.Obj().Name(), "Kind")
-		an.unionTags[relatedTypeName] = append(an.unionTags[relatedTypeName], cst)
+		an.unionTags[named] = append(an.unionTags[named], cst)
 	}
 }
 
@@ -500,25 +512,26 @@ func (an *analyser) handleInterface(ty types.Type, tags fieldTags) union {
 	}
 	itfName := named.Obj().Name()
 
-	if tags.kindField == "" {
-		panic("missing tag kind-field for field with type " + itfName)
+	if tags.versionField == "" {
+		panic("missing tag version-field for field with type " + itfName)
 	}
 
-	out := union{type_: named, flagFieldName: tags.kindField}
+	out := union{type_: named, flagFieldName: tags.versionField}
 
-	flags := an.unionTags[itfName]
-	byConcreteType := map[string]*types.Const{}
+	flags := an.unionTags[tags.versionType]
+	byVersion := map[string]*types.Const{}
 	for _, flag := range flags {
-		concreteTypeName := strings.ReplaceAll(flag.Name(), "Kind", "")
-		byConcreteType[concreteTypeName] = flag
+		_, version, _ := strings.Cut(flag.Name(), "Version")
+		byVersion[version] = flag
 	}
 
 	for _, member := range an.interfaces[itf] {
 		memberName := member.Obj().Name()
+		version := strings.TrimPrefix(memberName, itfName)
 		st := an.getOrAnalyseStruct(memberName)
-		flag, ok := byConcreteType[memberName]
+		flag, ok := byVersion[version]
 		if !ok {
-			panic(fmt.Sprintf("union flag %sKind%s not defined", itfName, strings.TrimPrefix(memberName, itfName)))
+			panic(fmt.Sprintf("union flag %sVersion%s not defined", itfName, version))
 		}
 		out.members = append(out.members, st)
 		out.flags = append(out.flags, flag)
@@ -545,12 +558,12 @@ func (an *analyser) analyzeStruct(str structDef) (out structLayout) {
 
 	st := str.underlying
 	for i := 0; i < st.NumFields(); i++ {
-		field, tag := st.Field(i), newFieldTags(st.Tag(i))
+		field, tags := st.Field(i), newFieldTags(st, st.Tag(i))
 
 		var sf structField
 		sf.name = field.Name()
 		astDecl := str.aliases[field.Name()]
-		sf.type_ = an.handleFieldType(field.Type(), tag, astDecl)
+		sf.type_ = an.handleFieldType(field.Type(), tags, astDecl)
 
 		out.fields = append(out.fields, sf)
 	}

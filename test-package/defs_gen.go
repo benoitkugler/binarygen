@@ -503,7 +503,7 @@ func parseWithUnion(src []byte) (withUnion, int, error) {
 		}
 
 		_ = subSlice[2] // early bound checking
-		item.version = subtableKind(binary.BigEndian.Uint16(subSlice[0:]))
+		item.version = subtableVersion(binary.BigEndian.Uint16(subSlice[0:]))
 		item.otherField = subSlice[2]
 		n += 3
 
@@ -512,12 +512,12 @@ func parseWithUnion(src []byte) (withUnion, int, error) {
 		var read int
 		var err error
 		switch item.version {
-		case subtableKind1:
+		case subtableVersion1:
 			item.data, read, err = parseSubtable1(src[n:])
-		case subtableKind2:
+		case subtableVersion2:
 			item.data, read, err = parseSubtable2(src[n:])
 		default:
-			err = fmt.Errorf("unsupported subtableKind %d", item.version)
+			err = fmt.Errorf("unsupported subtableVersion %d", item.version)
 		}
 		if err != nil {
 			return withUnion{}, 0, err

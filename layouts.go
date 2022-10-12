@@ -73,14 +73,15 @@ type slice struct {
 // union is an union of types, identified by a tag
 //
 // It is defined in the source code by an interface <itfName>
-// and tags with type following the convention <itfName>Kind
+// and tags with type following the convention Version<concreteName>
 // Each concrete type must be named <itfName><concreteName>,
-// and the flags value must be named <itfName>Kind<concreteName>
+// and the flags value must be named <...>Version<concreteName>
 type union struct {
 	type_ *types.Named
 
 	// the possible flag values, in the same order as `members`
 	flags []*types.Const
+
 	// the possible types
 	members []structLayout
 
