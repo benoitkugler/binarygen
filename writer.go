@@ -31,6 +31,12 @@ func writeBasicType(sliceName, varName string, size int, offset int) string {
 	}
 }
 
+// TODO:
+func (fixedSizeList) appender(cc codeContext) string { return "" }
+
+// TODO:
+func (structField) appender(cc codeContext) string { return "" }
+
 // func (wc withConstructor) generateWriter(srcVar, dstSlice string, offset int) string {
 // 	var accesVar string
 // 	if wc.isMethod {

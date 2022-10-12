@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -21,7 +20,7 @@ func Generate(path string) error {
 
 	code := an.generateCode()
 
-	outfile := filepath.Join(filepath.Dir(path), "gen_binary_format.go")
+	outfile := strings.TrimSuffix(path, ".go") + "_gen.go"
 	content := []byte(fmt.Sprintf(`
 	package %s
 
@@ -75,6 +74,23 @@ func (cc codeContext) variableExpr(field string) string {
 	return fmt.Sprintf("%s.%s", cc.objectName, field)
 }
 
+// set `offsetExpr` to <offset> + i * <elementSize>
+func (cc *codeContext) setArrayLikeOffsetExpr(elementSize int, offsetExpr string) {
+	if elementSize == 1 {
+		if offsetExpr == "0" {
+			cc.offsetExpr = "i"
+		} else {
+			cc.offsetExpr = fmt.Sprintf("%s + i", offsetExpr)
+		}
+	} else {
+		if offsetExpr == "0" {
+			cc.offsetExpr = fmt.Sprintf("i * %d", elementSize)
+		} else {
+			cc.offsetExpr = fmt.Sprintf("%s + i * %d", offsetExpr, elementSize)
+		}
+	}
+}
+
 func (cc codeContext) parseFunction(args, body []string) string {
 	return fmt.Sprintf(`func parse%s(%s) (%s, int, error) {
 		var %s %s
@@ -90,25 +106,16 @@ func (cc codeContext) parseFunction(args, body []string) string {
 type group interface {
 	// returns the code blocks
 	// no trailing new line is required
-	parser(cc codeContext) []string
+	parser(cc codeContext) string
 
 	// returns the code blocks
 	// no trailing new line is required
-	appender(cc codeContext) []string
+	appender(cc codeContext) string
 }
 
 // group definition
 
-func (fixedSizeList) appender(cc codeContext) []string { return nil }
-
-func (structField) appender(cc codeContext) []string { return nil }
-
 func (st structLayout) generateParser() string {
-	groups := st.groups()
-	if len(groups) == 0 {
-		return ""
-	}
-
 	context := codeContext{
 		typeName:      st.name_,
 		objectName:    "item",
@@ -117,6 +124,12 @@ func (st structLayout) generateParser() string {
 	}
 
 	body, args := []string{"n := 0"}, []string{fmt.Sprintf("%s []byte", context.byteSliceName)}
+
+	groups := st.groups()
+	if len(groups) == 0 {
+		// empty struct are useful : generate the trivial parser
+		return context.parseFunction([]string{"[]byte"}, []string{"n := 0"})
+	}
 
 	for _, arg := range st.requiredArgs() {
 		args = append(args, arg.asSignature())
@@ -135,7 +148,7 @@ func (st structLayout) generateParser() string {
 	}
 
 	for _, group := range groups {
-		body = append(body, group.parser(context)...)
+		body = append(body, group.parser(context))
 	}
 
 	finalCode := context.parseFunction(args, body)

@@ -328,16 +328,10 @@ func sizeFromTag(tag string) int {
 	}
 }
 
-type fixedFieldType interface {
+type fixedSizeType interface {
 	oType
 
 	mustParser(cc codeContext, dstSelector string) string
-}
-
-// []<element> slice type
-type slice struct {
-	element fixedFieldType
-	sizeLen int
 }
 
 func (sl slice) requiredArgs(fieldName string) []argument {
@@ -363,7 +357,7 @@ type structLayout struct {
 func (sl structLayout) groups() (out []group) {
 	var fixedSize fixedSizeList
 	for _, field := range sl.fields {
-		_, hasFixedType := field.type_.(fixedFieldType)
+		_, hasFixedType := field.type_.(fixedSizeType)
 		if _, isFixedSize := field.type_.staticSize(); isFixedSize && hasFixedType {
 			fixedSize = append(fixedSize, field)
 			continue
@@ -440,7 +434,7 @@ func (an *analyser) handleFieldType(ty types.Type, tags fieldTags, astDecl ast.E
 	panic(fmt.Sprintf("unsupported field type in struct: %s", ty))
 }
 
-// check is the underlying type as fixed size;
+// check if the underlying type as fixed size;
 // return nil if not
 func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) oType {
 	// first check for custom constructor
@@ -459,7 +453,12 @@ func (an *analyser) handleFixedSize(ty types.Type, typeDecl ast.Expr) oType {
 			return basicType{name_: name, binarySize: L}
 		}
 	case *types.Array:
-		panic("array not supported yet")
+		elem := underlying.Elem()
+		resolvedElem := an.handleFixedSize(elem, sliceElement(typeDecl))
+		if resolvedElem, isElemBasic := resolvedElem.(basicType); isElemBasic {
+			return array{element: resolvedElem, length: int(underlying.Len())}
+		}
+		panic("array with elements of variable size is not supported")
 	}
 	return nil
 }
@@ -475,7 +474,7 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 
 		tags.lenSize = ""
 		fieldElement := an.handleFieldType(fieldType.Elem(), tags, sliceElement(typeDecl))
-		elementTyp, ok := fieldElement.(fixedFieldType)
+		elementTyp, ok := fieldElement.(fixedSizeType)
 		if !ok {
 			panic("slice of variable length element are not supported")
 		}
@@ -496,7 +495,13 @@ func (an *analyser) handleInterface(ty types.Type, tags fieldTags) union {
 		panic("anonymous interfaces not supported")
 	}
 	itfName := named.Obj().Name()
+
+	if tags.kindField == "" {
+		panic("missing tag kind-field for field with type " + itfName)
+	}
+
 	out := union{type_: named, flagFieldName: tags.kindField}
+
 	flags := an.unionTags[itfName]
 	byConcreteType := map[string]*types.Const{}
 	for _, flag := range flags {
@@ -509,7 +514,7 @@ func (an *analyser) handleInterface(ty types.Type, tags fieldTags) union {
 		st := an.getOrAnalyseStruct(memberName)
 		flag, ok := byConcreteType[memberName]
 		if !ok {
-			panic(fmt.Sprintf("union flag %sKind%s not defined", itfName, memberName))
+			panic(fmt.Sprintf("union flag %sKind%s not defined", itfName, strings.TrimPrefix(memberName, itfName)))
 		}
 		out.members = append(out.members, st)
 		out.flags = append(out.flags, flag)

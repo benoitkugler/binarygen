@@ -3,6 +3,7 @@ package binarygen
 import (
 	"fmt"
 	"go/format"
+	"os"
 	"testing"
 	"time"
 )
@@ -22,7 +23,7 @@ func Test_importSource(t *testing.T) {
 	an.performAnalysis()
 
 	obj := an.structDefs
-	if len(obj) != 10 {
+	if len(obj) != 13 {
 		t.Fatal("unexpected number of struct definitions:", len(obj))
 	}
 
@@ -52,6 +53,9 @@ func Test_generateParser(t *testing.T) {
 }
 
 func Test_Generate(t *testing.T) {
+	// remove previously generated file
+	_ = os.Remove("test-package/gen_binary_format")
+
 	err := Generate("test-package/defs.go")
 	if err != nil {
 		t.Fatal(err)

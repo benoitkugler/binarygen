@@ -22,6 +22,8 @@ type lookup struct {
 	t       tag
 	v       float214 `bin:"optional"`
 	w       fl32
+	array1  [5]byte
+	array2  [5]uint16
 }
 
 type embeded struct {
