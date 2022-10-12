@@ -286,45 +286,60 @@ func (sl slice) externalLengthVariable(fieldName string) string {
 }
 
 func (sl slice) parser(cc codeContext, fieldName string) string {
+	// special case for unbounded data
+	if sl.lengthLocation == "_toEnd" {
+		return fmt.Sprintf(`%s = %s[%s:]
+		%s = len(%s)
+		`, cc.variableExpr(fieldName), cc.byteSliceName, cc.offsetExpr,
+			cc.offsetExpr, cc.byteSliceName,
+		)
+	}
+
 	out := []string{
 		"{",
 		cc.subSlice("subSlice"),
 	}
 
 	lengthName := "arrayLength"
-	if sl.sizeLen == 0 {
+	if sl.lengthLocation == "" {
 		lengthName = sl.externalLengthVariable(fieldName)
 	}
 	elementSize, _ := sl.element.staticSize()
 
 	// step 1 : read the array length, if written in the start of the array
-	if sl.sizeLen != 0 {
+	sizeOffsetExpr := ""
+	if strings.HasPrefix(sl.lengthLocation, "_first") {
+		size := sizeFromTag(strings.TrimPrefix(sl.lengthLocation, "_first"))
+		sizeOffsetExpr = strconv.Itoa(size)
 		out = append(out,
-			affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen)}, cc))
+			affineLengthCheck(affine{offsetExpr: strconv.Itoa(size)}, cc))
 		out = append(out,
-			fmt.Sprintf("%s := int(%s)", lengthName, readBasicType(cc.byteSliceName, sl.sizeLen, "")))
+			fmt.Sprintf("%s := int(%s)", lengthName, readBasicType(cc.byteSliceName, size, "")))
+	} else if sl.lengthLocation != "" {
+		// length is provided by a field
+		out = append(out, fmt.Sprintf("%s := int(%s)", lengthName, cc.variableExpr(sl.lengthLocation)))
 	}
 
 	// step 2 : check the expected length
 	out = append(out,
-		affineLengthCheck(affine{offsetExpr: strconv.Itoa(sl.sizeLen), lengthName: lengthName, elementSize: elementSize}, cc))
+		affineLengthCheck(affine{offsetExpr: sizeOffsetExpr, lengthName: lengthName, elementSize: elementSize}, cc))
 
 	// step 3 : allocate the slice - it is garded by the check above
-	out = append(out, fmt.Sprintf("%s.%s = make([]%s, %s) // allocation guarded by the previous check", cc.objectName, fieldName, sl.element.name(), lengthName))
+	out = append(out, fmt.Sprintf("%s = make([]%s, %s) // allocation guarded by the previous check", cc.variableExpr(fieldName), sl.element.name(), lengthName))
 
 	// step 4 : loop to parse every elements
 	offset := cc.offsetExpr
-	cc.setArrayLikeOffsetExpr(elementSize, strconv.Itoa(sl.sizeLen))
+	cc.setArrayLikeOffsetExpr(elementSize, sizeOffsetExpr)
 	loopBody := sl.element.mustParser(cc, fmt.Sprintf("%s[i]", fieldName))
-	out = append(out, fmt.Sprintf(`for i := range %s.%s {
+	out = append(out, fmt.Sprintf(`for i := range %s {
 		%s
 	}
-	`, cc.objectName, fieldName, loopBody))
+	`, cc.variableExpr(fieldName), loopBody))
 
 	// step 5 : update the offset and close the scope
 	cc.offsetExpr = offset
-	increment := fmt.Sprintf("%d + %s * %d", sl.sizeLen, lengthName, elementSize)
-	if sl.sizeLen == 0 {
+	increment := fmt.Sprintf("%s + %s * %d", sizeOffsetExpr, lengthName, elementSize)
+	if sizeOffsetExpr == "" {
 		increment = fmt.Sprintf("%s * %d", lengthName, elementSize)
 	}
 	out = append(out,

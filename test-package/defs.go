@@ -2,16 +2,16 @@ package testpackage
 
 import "math"
 
-type VarInstance struct {
-	Coords    []fl1616 `len-size:"-"`
-	Coords2   []fl1616 `len-size:"-"`
+type varInstance struct {
+	Coords    []fl1616 `len:""`
+	Coords2   []fl1616 `len:""`
 	Subfamily uint16
 
 	PSStringID uint16 `bin:"optional"`
 }
 
 type varInstanceContainer struct {
-	inst VarInstance
+	inst varInstance
 }
 
 type lookup struct {
@@ -28,7 +28,7 @@ type lookup struct {
 
 type embeded struct {
 	a, b byte
-	c    []uint16 `len-size:"16"`
+	c    []uint16 `len:"_first16"`
 }
 
 type composed2 struct {
@@ -44,23 +44,26 @@ type composed struct {
 type simpleSubtable struct {
 	version uint16
 	x, y    int16
-	lookups []lookup `len-size:"16"`
-	array2  []uint32 `len-size:"16"`
+	lookups []lookup `len:"_first16"`
+	array2  []uint32 `len:"_first16"`
 }
 
 type complexeSubtable struct {
 	version uint16
 	x, y    int16
-	lookups []lookup `len-size:"16"`
+	lookups []lookup `len:"_first16"`
 	u, v    float214
 	a, b, c int64
-	array2  []uint32 `len-size:"32"`
-	array3  []fl32   `len-size:"64"`
+	array2  []uint32 `len:"_first32"`
+	array3  []fl32   `len:"_first64"`
 }
 
 type arrayLike struct {
-	array  []lookup   `len-size:"16"`
-	array2 []composed `len-size:"16"`
+	size   uint16
+	datas  []uint16   `len:"size"`
+	array  []lookup   `len:"_first16"`
+	array2 []composed `len:"_first16"`
+	data   []byte     `len:"_toEnd"`
 }
 
 type tag uint32
@@ -97,10 +100,11 @@ func fl1616ToUint(f fl1616) uint32 {
 }
 
 type withOffset struct {
-	version        uint16
-	offsetToSlice  []uint64 `offset-size:"32" len-size:"16"`
-	offsetToStruct lookup   `offset-size:"32"`
-	a, b, c        byte
+	version           uint16
+	offsetToSlice     []uint64 `offset-size:"32" len:"_first16"`
+	offsetToStruct    lookup   `offset-size:"32"`
+	a, b, c           byte
+	offsetToUnbounded []byte `offset-size:"16" len:"_toEnd"`
 }
 
 type withUnion struct {

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 func Generate(path string) error {
@@ -92,12 +93,17 @@ func (cc *codeContext) setArrayLikeOffsetExpr(elementSize int, offsetExpr string
 }
 
 func (cc codeContext) parseFunction(args, body []string) string {
-	return fmt.Sprintf(`func parse%s(%s) (%s, int, error) {
+	isExported := unicode.IsUpper([]rune(cc.typeName)[0])
+	funcTitle := "parse"
+	if isExported {
+		funcTitle = "Parse"
+	}
+	return fmt.Sprintf(`func %s%s(%s) (%s, int, error) {
 		var %s %s
 		%s
 		return %s, n, nil
 	}
-	`, strings.Title(cc.typeName), strings.Join(args, ","), cc.typeName, cc.objectName,
+	`, funcTitle, strings.Title(cc.typeName), strings.Join(args, ","), cc.typeName, cc.objectName,
 		cc.typeName, strings.Join(body, "\n"), cc.objectName)
 }
 

@@ -63,7 +63,10 @@ func importSource(path string) (analyser, error) {
 
 // additional meta data included as tags in structs definitions
 type fieldTags struct {
-	lenSize    string // for array, how big is the length storage
+	// for arrays, how big is specified the length:
+	// either _first8, _first16, _first32, _first64
+	// or the name of a field, or "-" when provided externally
+	len        string
 	offsetSize string // for data stored at an offset, how big is the offset storage
 	kindField  string // the name of the field containing the union kind
 }
@@ -71,7 +74,7 @@ type fieldTags struct {
 func newFieldTags(tag string) fieldTags {
 	t := reflect.StructTag(tag)
 	return fieldTags{
-		lenSize:    t.Get("len-size"),
+		len:        t.Get("len"),
 		offsetSize: t.Get("offset-size"),
 		kindField:  t.Get("kind-field"),
 	}
@@ -85,7 +88,7 @@ type structDef struct {
 }
 
 // register the structs in the given input file
-func (an *analyser) fetchStructs() {
+func (an *analyser) fetchTables() {
 	an.structDefs = map[string]structDef{}
 
 	for _, name := range an.scope.Names() {
@@ -93,6 +96,11 @@ func (an *analyser) fetchStructs() {
 
 		// filter by input file
 		if an.fset.File(obj.Pos()).Name() != an.filePath {
+			continue
+		}
+
+		if tn, isTypeName := obj.(*types.TypeName); isTypeName && tn.IsAlias() {
+			// ignore top level aliases
 			continue
 		}
 
@@ -207,7 +215,7 @@ func (an *analyser) fetchAliases(obj types.Object) map[string]ast.Expr {
 }
 
 func (an *analyser) performAnalysis() {
-	an.fetchStructs()
+	an.fetchTables()
 	an.fetchUnionFlags()
 	an.fetchInterfaces()
 
@@ -335,7 +343,7 @@ type fixedSizeType interface {
 }
 
 func (sl slice) requiredArgs(fieldName string) []argument {
-	if sl.sizeLen == 0 { // provided as function argument
+	if sl.lengthLocation == "" { // provided as function argument
 		return []argument{{sl.externalLengthVariable(fieldName), "int"}}
 	}
 	return nil
@@ -467,12 +475,9 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 	if fieldType, ok := ty.Underlying().(*types.Slice); ok {
 		var sl slice
 
-		size := sizeFromTag(tags.lenSize)
-		if size == -1 {
-			panic(fmt.Sprintf("missing tag 'len-size' for type %s", ty))
-		}
+		sl.lengthLocation = tags.len
 
-		tags.lenSize = ""
+		tags.len = ""
 		fieldElement := an.handleFieldType(fieldType.Elem(), tags, sliceElement(typeDecl))
 		elementTyp, ok := fieldElement.(fixedSizeType)
 		if !ok {
@@ -480,7 +485,6 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 		}
 
 		sl.element = elementTyp
-		sl.sizeLen = size
 
 		return sl, true
 	}

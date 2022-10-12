@@ -66,8 +66,8 @@ type array struct {
 
 // []<element> slice type
 type slice struct {
-	element fixedSizeType
-	sizeLen int
+	element        fixedSizeType
+	lengthLocation string
 }
 
 // union is an union of types, identified by a tag
