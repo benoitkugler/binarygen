@@ -38,7 +38,7 @@ func importSource(path string) (analyser, error) {
 	}
 
 	cfg := &packages.Config{
-		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedName | packages.NeedFiles,
+		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedName | packages.NeedFiles | packages.NeedDeps | packages.NeedImports,
 	}
 	tmp, err := packages.Load(cfg, "file="+path)
 	if err != nil {
