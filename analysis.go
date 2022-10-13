@@ -8,6 +8,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -361,6 +362,22 @@ func (sl slice) requiredArgs(fieldName string) []argument {
 	return nil
 }
 
+// return the union of the arguments for each member
+func (u union) requiredArgs() []argument {
+	all := map[argument]bool{}
+	for _, member := range u.members {
+		for _, arg := range member.requiredArgs() {
+			all[arg] = true
+		}
+	}
+	out := make([]argument, 0, len(all))
+	for arg := range all {
+		out = append(out, arg)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].variableName < out[j].variableName })
+	return out
+}
+
 type structField struct {
 	type_ oType
 	name  string // name of the field
@@ -406,6 +423,8 @@ func (st structLayout) requiredArgs() (args []argument) {
 		switch ty := field.type_.(type) {
 		case slice:
 			args = append(args, ty.requiredArgs(field.name)...)
+		case union:
+			args = append(args, ty.requiredArgs()...)
 		case structLayout: // recurse
 			args = append(args, ty.requiredArgs()...)
 		}

@@ -148,6 +148,15 @@ func updateOffsetExpr(size string, cc codeContext) string {
 	return fmt.Sprintf("%s += %s", cc.offsetExpr, size)
 }
 
+// argumentsList return a comma separated list of argument names
+func argumentsList(arguments []argument) string {
+	var args []string
+	for _, arg := range arguments {
+		args = append(args, arg.variableName)
+	}
+	return strings.Join(args, ", ")
+}
+
 // --------------------------- fixed size types ---------------------------
 
 func (wc withConstructor) mustParser(cc codeContext, selector string) string {
@@ -357,10 +366,6 @@ func parserForFixedSize(fieldName string, ty fixedSizeType, cc codeContext) stri
 }
 
 func (st structLayout) parser(cc codeContext, dstSelector string) string {
-	var args []string
-	for _, arg := range st.requiredArgs() {
-		args = append(args, arg.variableName)
-	}
 	return fmt.Sprintf(`
 		{
 			var read int
@@ -370,7 +375,7 @@ func (st structLayout) parser(cc codeContext, dstSelector string) string {
 				%s
 			}
 			%s
-		}`, cc.variableExpr(dstSelector), strings.Title(st.name_), cc.byteSliceName, cc.offsetExpr, strings.Join(args, ", "),
+		}`, cc.variableExpr(dstSelector), strings.Title(st.name_), cc.byteSliceName, cc.offsetExpr, argumentsList(st.requiredArgs()),
 		cc.returnError("err"),
 		updateOffsetExpr("read", cc),
 	)
@@ -383,10 +388,11 @@ func (st structField) parser(cc codeContext) string {
 func (u union) parser(cc codeContext, dstSelector string) string {
 	var cases []string
 	for i, flag := range u.flags {
+		member := u.members[i]
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = parse%s(%s[%s:], %s)`,
-			flag.Name(), cc.variableExpr(dstSelector), strings.Title(u.members[i].name()), cc.byteSliceName,
-			cc.offsetExpr, "", // TODO: if needed handle args
+			flag.Name(), cc.variableExpr(dstSelector), strings.Title(member.name()), cc.byteSliceName,
+			cc.offsetExpr, argumentsList(member.requiredArgs()), // TODO: if needed handle args
 		))
 	}
 	kindVariable := cc.variableExpr(u.flagFieldName)
