@@ -19,10 +19,13 @@ type analyser struct {
 	ast   *ast.File    // file containing types declaration
 	fset  *token.FileSet
 
-	unionTags     map[*types.Named][]*types.Const     // tags for each tag type
-	interfaces    map[*types.Interface][]*types.Named // members for each interface
-	structDefs    map[string]structDef                // by name, filled by fetchStructs()
-	structLayouts map[string]structLayout             // by name, filled by the analysis
+	unionTags  map[*types.Named][]*types.Const     // tags for each tag type
+	interfaces map[*types.Interface][]*types.Named // members for each interface
+
+	structDefs    map[string]structDef // by name, filled by fetchTables()
+	fileTypeNames []string             // filled by fetchTables
+
+	structLayouts map[string]structLayout // by name, filled by the analysis
 
 	pkgName, filePath string
 }
@@ -103,14 +106,10 @@ type structDef struct {
 // register the structs in the given input file
 func (an *analyser) fetchTables() {
 	an.structDefs = map[string]structDef{}
+	an.fileTypeNames = nil
 
 	for _, name := range an.scope.Names() {
 		obj := an.scope.Lookup(name)
-
-		// filter by input file
-		if an.fset.File(obj.Pos()).Name() != an.filePath {
-			continue
-		}
 
 		if tn, isTypeName := obj.(*types.TypeName); isTypeName && tn.IsAlias() {
 			// ignore top level aliases
@@ -125,6 +124,11 @@ func (an *analyser) fetchTables() {
 				aliases:    an.fetchAliases(obj),
 			}
 			an.structDefs[name] = str
+
+			// filter by input file
+			if an.fset.File(obj.Pos()).Name() == an.filePath {
+				an.fileTypeNames = append(an.fileTypeNames, name)
+			}
 		}
 	}
 }
@@ -233,7 +237,7 @@ func (an *analyser) performAnalysis() {
 	an.fetchInterfaces()
 
 	an.structLayouts = make(map[string]structLayout, len(an.structDefs))
-	for k := range an.structDefs {
+	for _, k := range an.fileTypeNames {
 		an.getOrAnalyseStruct(k) // write the result into structLayouts
 	}
 }
@@ -330,8 +334,10 @@ func (an *analyser) newWithConstructor(ty types.Type, typeDecl ast.Expr) (withCo
 }
 
 func sliceElement(typeDecl ast.Expr) ast.Expr {
-	slice := typeDecl.(*ast.ArrayType)
-	return slice.Elt
+	if slice, ok := typeDecl.(*ast.ArrayType); ok {
+		return slice.Elt
+	}
+	return nil
 }
 
 func sizeFromTag(tag string) int {
@@ -569,7 +575,7 @@ func (an *analyser) getOrAnalyseStruct(typeName string) structLayout {
 		return out
 	}
 
-	panic("unknown type name" + typeName)
+	panic("unknown type name " + typeName)
 }
 
 func (an *analyser) analyzeStruct(str structDef) (out structLayout) {
