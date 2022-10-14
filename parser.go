@@ -219,10 +219,11 @@ func (fs fixedSizeList) mustParser(cc codeContext) string {
 }
 
 // return the mustParse function and the body of the parse function
-func (fs fixedSizeList) mustParserFunction(cc codeContext) (mustParse string, parseBody []string) {
+func (fs fixedSizeList) mustParserFunction(cc codeContext) (mustParse declaration, parseBody []string) {
 	mustParseBody := fs.mustParser(cc)
 
-	mustParse = fmt.Sprintf(`func (%s *%s) mustParse(%s []byte) {
+	mustParse.id = cc.typeName + ".mustParse"
+	mustParse.content = fmt.Sprintf(`func (%s *%s) mustParse(%s []byte) {
 		%s
 	}
 	`, cc.objectName, cc.typeName, cc.byteSliceName, mustParseBody)

@@ -3,7 +3,6 @@ package binarygen
 import (
 	"fmt"
 	"go/format"
-	"os"
 	"testing"
 	"time"
 )
@@ -40,10 +39,14 @@ func Test_generateParser(t *testing.T) {
 
 	an.performAnalysis()
 
-	code := ""
-	for _, v := range an.structLayouts {
-		code += v.generateParser() + "\n"
+	buffer := newDeclarationBuffer()
+	for _, st := range an.structLayouts {
+		for _, decl := range st.generateParser() {
+			buffer.add(decl)
+		}
 	}
+
+	code := buffer.code()
 
 	out, err := format.Source([]byte(code))
 	if err != nil {
@@ -53,9 +56,6 @@ func Test_generateParser(t *testing.T) {
 }
 
 func Test_Generate(t *testing.T) {
-	// remove previously generated file
-	_ = os.Remove("test-package/gen_binary_format")
-
 	err := Generate("test-package/defs.go")
 	if err != nil {
 		t.Fatal(err)

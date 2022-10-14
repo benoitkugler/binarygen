@@ -3,7 +3,10 @@
 package binarygen
 
 import (
+	"errors"
 	"fmt"
+	"go/types"
+	"io/fs"
 	"os"
 	"os/exec"
 	"sort"
@@ -12,6 +15,14 @@ import (
 )
 
 func Generate(path string) error {
+	outfile := strings.TrimSuffix(path, ".go") + "_gen.go"
+
+	// start by cleaning up existing file
+	err := os.Remove(outfile)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+
 	an, err := importSource(path)
 	if err != nil {
 		return err
@@ -21,7 +32,6 @@ func Generate(path string) error {
 
 	code := an.generateCode()
 
-	outfile := strings.TrimSuffix(path, ".go") + "_gen.go"
 	content := []byte(fmt.Sprintf(`
 	package %s
 
@@ -40,6 +50,20 @@ func Generate(path string) error {
 	return err
 }
 
+// check if the function has already been generated
+func (an *analyser) isFuncOrMethodDefined(id string) bool {
+	if typeName, method, isMethod := strings.Cut(id, "."); isMethod {
+		ty := an.scope.Lookup(typeName).Type().(*types.Named)
+		for i := 0; i < ty.NumMethods(); i++ {
+			if ty.Method(i).Name() == method {
+				return true
+			}
+		}
+		return false
+	}
+	return an.scope.Lookup(id) != nil
+}
+
 func (an *analyser) generateCode() string {
 	var keys []string
 	for k := range an.structLayouts {
@@ -47,16 +71,52 @@ func (an *analyser) generateCode() string {
 	}
 	sort.Strings(keys)
 
-	code := ""
+	buffer := newDeclarationBuffer()
 	for _, k := range keys {
 		st := an.structLayouts[k]
-		code += st.generateParser() + "\n"
+		for _, decl := range st.generateParser() {
+			if an.isFuncOrMethodDefined(decl.id) {
+				continue
+			}
+			buffer.add(decl)
+		}
 	}
 
-	return code
+	return buffer.code()
 }
 
-// ----------------------------- V2 -----------------------------
+type declarationBuffer struct {
+	decls []declaration
+	seen  map[string]bool
+}
+
+func newDeclarationBuffer() declarationBuffer {
+	return declarationBuffer{seen: map[string]bool{}}
+}
+
+func (db *declarationBuffer) add(decl declaration) {
+	if db.seen[decl.id] {
+		return
+	}
+	db.decls = append(db.decls, decl)
+	db.seen[decl.id] = true
+}
+
+func (db declarationBuffer) code() string {
+	var builder strings.Builder
+	for _, decl := range db.decls {
+		builder.WriteString(decl.content)
+	}
+	return builder.String()
+}
+
+// declaration is a chunk of generated go code,
+// with an id used to avoid duplication
+type declaration struct {
+	id      string
+	content string
+}
+
 type codeContext struct {
 	// <variableName> = parse<typeName>(<byteSliceName>)
 	// <byteSliceName> = appendTo(<variableName>, <byteSliceName>)
@@ -92,19 +152,21 @@ func (cc *codeContext) setArrayLikeOffsetExpr(elementSize int, offsetExpr string
 	}
 }
 
-func (cc codeContext) parseFunction(args, body []string) string {
+func (cc codeContext) generateParseFunction(args, body []string) declaration {
 	isExported := unicode.IsUpper([]rune(cc.typeName)[0])
 	funcTitle := "parse"
 	if isExported {
 		funcTitle = "Parse"
 	}
-	return fmt.Sprintf(`func %s%s(%s) (%s, int, error) {
+	funcName := funcTitle + strings.Title(cc.typeName)
+	content := fmt.Sprintf(`func %s(%s) (%s, int, error) {
 		var %s %s
 		%s
 		return %s, n, nil
 	}
-	`, funcTitle, strings.Title(cc.typeName), strings.Join(args, ","), cc.typeName, cc.objectName,
+	`, funcName, strings.Join(args, ","), cc.typeName, cc.objectName,
 		cc.typeName, strings.Join(body, "\n"), cc.objectName)
+	return declaration{id: funcName, content: content}
 }
 
 // one or many field whose parsing (or writting)
@@ -121,7 +183,7 @@ type group interface {
 
 // group definition
 
-func (st structLayout) generateParser() string {
+func (st structLayout) generateParser() []declaration {
 	context := codeContext{
 		typeName:      st.name_,
 		objectName:    "item",
@@ -134,7 +196,7 @@ func (st structLayout) generateParser() string {
 	groups := st.groups()
 	if len(groups) == 0 {
 		// empty struct are useful : generate the trivial parser
-		return context.parseFunction([]string{"[]byte"}, []string{"n := 0"})
+		return []declaration{context.generateParseFunction([]string{"[]byte"}, []string{"n := 0"})}
 	}
 
 	for _, arg := range st.requiredArgs() {
@@ -148,16 +210,14 @@ func (st structLayout) generateParser() string {
 		mustParse, parseBody := fs.mustParserFunction(context)
 		body = append(body, parseBody...)
 
-		finalCode := mustParse + "\n\n" + context.parseFunction(args, body)
-
-		return finalCode
+		return []declaration{mustParse, context.generateParseFunction(args, body)}
 	}
 
 	for _, group := range groups {
 		body = append(body, group.parser(context))
 	}
 
-	finalCode := context.parseFunction(args, body)
+	finalCode := context.generateParseFunction(args, body)
 
-	return finalCode
+	return []declaration{finalCode}
 }

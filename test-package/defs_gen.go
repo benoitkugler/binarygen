@@ -76,7 +76,6 @@ func parseArrayLike(src []byte) (arrayLike, int, error) {
 
 	return item, n, nil
 }
-
 func parseComplexeSubtable(src []byte) (complexeSubtable, int, error) {
 	var item complexeSubtable
 	n := 0
@@ -167,13 +166,11 @@ func parseComplexeSubtable(src []byte) (complexeSubtable, int, error) {
 
 	return item, n, nil
 }
-
 func (item *composed) mustParse(src []byte) {
 	_ = src[101] // early bound checking
 	item.a.mustParse(src[0:])
 	item.b.mustParse(src[51:])
 }
-
 func parseComposed(src []byte) (composed, int, error) {
 	var item composed
 	n := 0
@@ -185,7 +182,6 @@ func parseComposed(src []byte) (composed, int, error) {
 	n += 102
 	return item, n, nil
 }
-
 func parseComposed2(src []byte) (composed2, int, error) {
 	var item composed2
 	n := 0
@@ -214,7 +210,6 @@ func parseComposed2(src []byte) (composed2, int, error) {
 	}
 	return item, n, nil
 }
-
 func parseEmbeded(src []byte) (embeded, int, error) {
 	var item embeded
 	n := 0
@@ -250,7 +245,6 @@ func parseEmbeded(src []byte) (embeded, int, error) {
 	}
 	return item, n, nil
 }
-
 func (item *lookup) mustParse(src []byte) {
 	_ = src[50] // early bound checking
 	item.a = int32(binary.BigEndian.Uint32(src[0:]))
@@ -270,7 +264,6 @@ func (item *lookup) mustParse(src []byte) {
 		item.array2[i] = binary.BigEndian.Uint16(src[41+i*2:])
 	}
 }
-
 func parseLookup(src []byte) (lookup, int, error) {
 	var item lookup
 	n := 0
@@ -282,7 +275,6 @@ func parseLookup(src []byte) (lookup, int, error) {
 	n += 51
 	return item, n, nil
 }
-
 func parseSimpleSubtable(src []byte) (simpleSubtable, int, error) {
 	var item simpleSubtable
 	n := 0
@@ -337,12 +329,10 @@ func parseSimpleSubtable(src []byte) (simpleSubtable, int, error) {
 	}
 	return item, n, nil
 }
-
 func (item *subtable1) mustParse(src []byte) {
 	_ = src[7] // early bound checking
 	item.F = binary.BigEndian.Uint64(src[0:])
 }
-
 func parseSubtable1(src []byte) (subtable1, int, error) {
 	var item subtable1
 	n := 0
@@ -354,12 +344,10 @@ func parseSubtable1(src []byte) (subtable1, int, error) {
 	n += 8
 	return item, n, nil
 }
-
 func (item *subtable2) mustParse(src []byte) {
 	_ = src[0] // early bound checking
 	item.F = src[0]
 }
-
 func parseSubtable2(src []byte) (subtable2, int, error) {
 	var item subtable2
 	n := 0
@@ -371,7 +359,6 @@ func parseSubtable2(src []byte) (subtable2, int, error) {
 	n += 1
 	return item, n, nil
 }
-
 func parseVarInstance(src []byte, coordsLength int, coords2Length int) (varInstance, int, error) {
 	var item varInstance
 	n := 0
@@ -415,7 +402,6 @@ func parseVarInstance(src []byte, coordsLength int, coords2Length int) (varInsta
 	}
 	return item, n, nil
 }
-
 func parseVarInstanceContainer(src []byte, coordsLength int, coords2Length int) (varInstanceContainer, int, error) {
 	var item varInstanceContainer
 	n := 0
@@ -431,7 +417,6 @@ func parseVarInstanceContainer(src []byte, coordsLength int, coords2Length int) 
 	}
 	return item, n, nil
 }
-
 func parseWithOffset(src []byte) (withOffset, int, error) {
 	var item withOffset
 	n := 0
@@ -495,7 +480,6 @@ func parseWithOffset(src []byte) (withOffset, int, error) {
 	}
 	return item, n, nil
 }
-
 func parseWithUnion(src []byte) (withUnion, int, error) {
 	var item withUnion
 	n := 0
