@@ -24,6 +24,14 @@ type oType interface {
 	parser(cc codeContext, dstSelector string) string
 }
 
+// to be constistent a type returning a static size
+// must implement this interface
+type fixedSizeType interface {
+	oType
+
+	mustParser(cc codeContext, dstSelector string) string
+}
+
 type withConstructor struct {
 	name_ string
 	size_ int
@@ -66,7 +74,7 @@ type array struct {
 
 // []<element> slice type
 type slice struct {
-	element        fixedSizeType
+	element        oType
 	lengthLocation string
 }
 

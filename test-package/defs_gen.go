@@ -364,6 +364,7 @@ func parseVarInstance(src []byte, coordsLength int, coords2Length int) (varInsta
 	n := 0
 	{
 		subSlice := src[n:]
+
 		if L := len(subSlice); L < +coordsLength*4 {
 			return varInstance{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", +coordsLength*4, L)
 		}
@@ -377,6 +378,7 @@ func parseVarInstance(src []byte, coordsLength int, coords2Length int) (varInsta
 	}
 	{
 		subSlice := src[n:]
+
 		if L := len(subSlice); L < +coords2Length*4 {
 			return varInstance{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", +coords2Length*4, L)
 		}

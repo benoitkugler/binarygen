@@ -56,7 +56,7 @@ type complexeSubtable struct {
 	a, b, c int64
 	array2  []uint32 `len:"_first32"`
 	array3  []fl32   `len:"_first64"`
-	rawData []byte   `len:"_startToEnd"`
+	rawData []byte   `len:"__startToEnd"`
 }
 
 type arrayLike struct {
@@ -64,7 +64,7 @@ type arrayLike struct {
 	datas  []uint16   `len:"size"`
 	array  []lookup   `len:"_first16"`
 	array2 []composed `len:"_first16"`
-	data   []byte     `len:"_toEnd"`
+	data   []byte     `len:"__toEnd"`
 }
 
 type tag uint32
@@ -105,7 +105,7 @@ type withOffset struct {
 	offsetToSlice     []uint64 `offset-size:"32" len:"_first16"`
 	offsetToStruct    lookup   `offset-size:"32"`
 	a, b, c           byte
-	offsetToUnbounded []byte `offset-size:"16" len:"_toEnd"`
+	offsetToUnbounded []byte `offset-size:"16" len:"__toEnd"`
 }
 
 type withUnion struct {

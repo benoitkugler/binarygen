@@ -295,48 +295,116 @@ func (sl slice) externalLengthVariable(fieldName string) string {
 	return strings.ToLower(fieldName) + "Length"
 }
 
-func (sl slice) parser(cc codeContext, fieldName string) string {
+func (sl slice) parserForUnboundedBytes(cc codeContext, fieldName string) string {
 	// special case for unbounded data
-	if sl.lengthLocation == "_toEnd" {
+	if sl.lengthLocation == "__toEnd" {
 		return fmt.Sprintf(`%s = %s[%s:]
 		%s = len(%s)
 		`, cc.variableExpr(fieldName), cc.byteSliceName, cc.offsetExpr,
 			cc.offsetExpr, cc.byteSliceName,
 		)
-	} else if sl.lengthLocation == "_startToEnd" {
+	} else if sl.lengthLocation == "__startToEnd" {
 		return fmt.Sprintf(`%s = %s
 		%s = len(%s)
 		`, cc.variableExpr(fieldName), cc.byteSliceName,
 			cc.offsetExpr, cc.byteSliceName,
 		)
+	} else {
+		fieldLength := strings.TrimPrefix(sl.lengthLocation, "__startTo_")
+		errorStatement := fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", L, len(%s))`, cc.byteSliceName)
+		return fmt.Sprintf(`
+		L := int(%s)
+		if len(%s) < L {
+			%s
+		}
+		%s = %s[:%s]
+		%s = L
+		`, cc.variableExpr(fieldLength),
+			cc.byteSliceName,
+			cc.returnError(errorStatement),
+			cc.variableExpr(fieldName), cc.byteSliceName, cc.variableExpr(fieldLength),
+			cc.offsetExpr,
+		)
+	}
+}
+
+// The field is a slice of structs, whose size is only known at run time
+// The generated code will look like
+//
+//	currentOffset := 0
+//	for i := 0; i < number; i++ {
+//		chain, size, err := parseMorxChain(data[currentOffset:])
+//		if err != nil {
+//			return nil, err
+//		}
+//		out = append(out, chain)
+//		currentOffset += size
+//	}
+func (sl slice) parserForVariableSizeElement(cc codeContext, fieldName string) string {
+	out := []string{
+		"{",
 	}
 
+	// step 1 : read the array length
+	lengthName, sizeOffsetExpr, code := sl.codeForLength(cc, fieldName)
+	if sizeOffsetExpr != "" {
+		panic("offset not yet supported in slice.parserForVariableSizeElement")
+	}
+	out = append(out, code)
+
+	// step 2 : loop and update the offset
+	out = append(out, fmt.Sprintf(`for i := 0; i < %s; i++ {
+		elem, read, err := parse%s(%s[%s:])
+		if err != nil {
+			%s
+		}
+		%s = append(%s, elem)
+		%s
+		}`, lengthName,
+		strings.Title(sl.element.name()), cc.byteSliceName, cc.offsetExpr,
+		cc.returnError("err"),
+		cc.variableExpr(fieldName), cc.variableExpr(fieldName),
+		updateOffsetExpr("read", cc),
+	),
+		"}",
+	)
+	return strings.Join(out, "\n")
+}
+
+func (sl slice) codeForLength(cc codeContext, fieldName string) (lengthName, sizeOffsetExpr string, code string) {
+	lengthName = "arrayLength"
+	if sl.lengthLocation == "" {
+		lengthName = sl.externalLengthVariable(fieldName)
+	}
+
+	// Read the array length, if written in the start of the array
+	if strings.HasPrefix(sl.lengthLocation, "_first") {
+		size := sizeFromTag(strings.TrimPrefix(sl.lengthLocation, "_first"))
+		sizeOffsetExpr = strconv.Itoa(size)
+		code = affineLengthCheck(affine{offsetExpr: strconv.Itoa(size)}, cc) +
+			fmt.Sprintf("%s := int(%s)", lengthName, readBasicType(cc.byteSliceName, size, ""))
+	} else if sl.lengthLocation != "" {
+		// length is provided by a field
+		code = fmt.Sprintf("%s := int(%s)", lengthName, cc.variableExpr(sl.lengthLocation))
+	}
+
+	return
+}
+
+func (sl slice) parserForFixedSizeElement(cc codeContext, fieldName string) string {
 	out := []string{
 		"{",
 		cc.subSlice("subSlice"),
 	}
 
-	lengthName := "arrayLength"
-	if sl.lengthLocation == "" {
-		lengthName = sl.externalLengthVariable(fieldName)
-	}
-	elementSize, _ := sl.element.staticSize()
-
-	// step 1 : read the array length, if written in the start of the array
-	sizeOffsetExpr := ""
-	if strings.HasPrefix(sl.lengthLocation, "_first") {
-		size := sizeFromTag(strings.TrimPrefix(sl.lengthLocation, "_first"))
-		sizeOffsetExpr = strconv.Itoa(size)
-		out = append(out,
-			affineLengthCheck(affine{offsetExpr: strconv.Itoa(size)}, cc))
-		out = append(out,
-			fmt.Sprintf("%s := int(%s)", lengthName, readBasicType(cc.byteSliceName, size, "")))
-	} else if sl.lengthLocation != "" {
-		// length is provided by a field
-		out = append(out, fmt.Sprintf("%s := int(%s)", lengthName, cc.variableExpr(sl.lengthLocation)))
+	// step 1 : read the array length
+	lengthName, sizeOffsetExpr, code := sl.codeForLength(cc, fieldName)
+	if code != "" {
+		out = append(out, code)
 	}
 
 	// step 2 : check the expected length
+	elementSize, _ := sl.element.staticSize()
 	out = append(out,
 		affineLengthCheck(affine{offsetExpr: sizeOffsetExpr, lengthName: lengthName, elementSize: elementSize}, cc))
 
@@ -346,7 +414,7 @@ func (sl slice) parser(cc codeContext, fieldName string) string {
 	// step 4 : loop to parse every elements
 	offset := cc.offsetExpr
 	cc.setArrayLikeOffsetExpr(elementSize, sizeOffsetExpr)
-	loopBody := sl.element.mustParser(cc, fmt.Sprintf("%s[i]", fieldName))
+	loopBody := sl.element.(fixedSizeType).mustParser(cc, fmt.Sprintf("%s[i]", fieldName))
 	out = append(out, fmt.Sprintf(`for i := range %s {
 		%s
 	}
@@ -364,6 +432,20 @@ func (sl slice) parser(cc codeContext, fieldName string) string {
 	)
 
 	return strings.Join(out, "\n")
+}
+
+func (sl slice) parser(cc codeContext, fieldName string) string {
+	// special case for unbounded bytes data
+	if strings.HasPrefix(sl.lengthLocation, "__") {
+		return sl.parserForUnboundedBytes(cc, fieldName)
+	}
+
+	// else, check for actually fixed size elements
+	if _, isFixedSize := sl.element.staticSize(); isFixedSize {
+		return sl.parserForFixedSizeElement(cc, fieldName)
+	}
+
+	return sl.parserForVariableSizeElement(cc, fieldName)
 }
 
 // add the bound checks

@@ -355,12 +355,6 @@ func sizeFromTag(tag string) int {
 	}
 }
 
-type fixedSizeType interface {
-	oType
-
-	mustParser(cc codeContext, dstSelector string) string
-}
-
 func (sl slice) requiredArgs(fieldName string) []argument {
 	if sl.lengthLocation == "" { // provided as function argument
 		return []argument{{sl.externalLengthVariable(fieldName), "int"}}
@@ -515,13 +509,7 @@ func (an *analyser) handleSlice(ty types.Type, tags fieldTags, typeDecl ast.Expr
 		sl.lengthLocation = tags.len
 
 		tags.len = ""
-		fieldElement := an.handleFieldType(fieldType.Elem(), tags, sliceElement(typeDecl))
-		elementTyp, ok := fieldElement.(fixedSizeType)
-		if !ok {
-			panic("slice of variable length element are not supported")
-		}
-
-		sl.element = elementTyp
+		sl.element = an.handleFieldType(fieldType.Elem(), tags, sliceElement(typeDecl))
 
 		return sl, true
 	}
