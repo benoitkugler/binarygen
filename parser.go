@@ -292,7 +292,7 @@ func (fs fixedSizeList) parser(cc codeContext) string {
 }
 
 func (sl slice) externalLengthVariable(fieldName string) string {
-	return strings.ToLower(fieldName) + "Length"
+	return strings.ToLower(fieldName) + "Num"
 }
 
 func (sl slice) parserForUnboundedBytes(cc codeContext, fieldName string) string {
@@ -310,19 +310,26 @@ func (sl slice) parserForUnboundedBytes(cc codeContext, fieldName string) string
 			cc.offsetExpr, cc.byteSliceName,
 		)
 	} else {
-		fieldLength := strings.TrimPrefix(sl.lengthLocation, "__startTo_")
+		var fieldLength, sliceExpr string
+		if strings.HasPrefix(sl.lengthLocation, "__to") {
+			fieldLength = strings.TrimPrefix(sl.lengthLocation, "__to_")
+			sliceExpr = fmt.Sprintf("%s:%s", cc.offsetExpr, cc.variableExpr(fieldLength))
+		} else {
+			fieldLength = strings.TrimPrefix(sl.lengthLocation, "__startTo_")
+			sliceExpr = fmt.Sprintf(":%s", cc.variableExpr(fieldLength))
+		}
 		errorStatement := fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", L, len(%s))`, cc.byteSliceName)
 		return fmt.Sprintf(`
 		L := int(%s)
 		if len(%s) < L {
 			%s
 		}
-		%s = %s[:%s]
+		%s = %s[%s]
 		%s = L
 		`, cc.variableExpr(fieldLength),
 			cc.byteSliceName,
 			cc.returnError(errorStatement),
-			cc.variableExpr(fieldName), cc.byteSliceName, cc.variableExpr(fieldLength),
+			cc.variableExpr(fieldName), cc.byteSliceName, sliceExpr,
 			cc.offsetExpr,
 		)
 	}
