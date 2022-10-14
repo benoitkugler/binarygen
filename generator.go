@@ -82,6 +82,8 @@ func (an *analyser) generateCode() string {
 		}
 	}
 
+	buffer.removeUnused()
+
 	return buffer.code()
 }
 
@@ -102,6 +104,33 @@ func (db *declarationBuffer) add(decl declaration) {
 	db.seen[decl.id] = true
 }
 
+// remove non exported, unused function declaration
+func (db *declarationBuffer) removeUnused() {
+	var filtered []declaration
+	for i, decl := range db.decls {
+		if strings.Contains(decl.id, ".") || decl.isExported {
+			filtered = append(filtered, decl)
+			continue // always include methods and exported functions
+		}
+
+		isUsed := false
+		for j, other := range db.decls {
+			if i == j {
+				continue
+			}
+			if strings.Contains(other.content, decl.id) {
+				// the function is used, keep it
+				isUsed = true
+				break
+			}
+		}
+		if isUsed {
+			filtered = append(filtered, decl)
+		}
+	}
+	db.decls = filtered
+}
+
 func (db declarationBuffer) code() string {
 	var builder strings.Builder
 	for _, decl := range db.decls {
@@ -113,8 +142,9 @@ func (db declarationBuffer) code() string {
 // declaration is a chunk of generated go code,
 // with an id used to avoid duplication
 type declaration struct {
-	id      string
-	content string
+	id         string
+	isExported bool
+	content    string
 }
 
 type codeContext struct {
@@ -166,7 +196,7 @@ func (cc codeContext) generateParseFunction(args, body []string) declaration {
 	}
 	`, funcName, strings.Join(args, ","), cc.typeName, cc.objectName,
 		cc.typeName, strings.Join(body, "\n"), cc.objectName)
-	return declaration{id: funcName, content: content}
+	return declaration{id: funcName, content: content, isExported: isExported}
 }
 
 // one or many field whose parsing (or writting)
