@@ -302,6 +302,12 @@ func (sl slice) parser(cc codeContext, fieldName string) string {
 		`, cc.variableExpr(fieldName), cc.byteSliceName, cc.offsetExpr,
 			cc.offsetExpr, cc.byteSliceName,
 		)
+	} else if sl.lengthLocation == "_startToEnd" {
+		return fmt.Sprintf(`%s = %s
+		%s = len(%s)
+		`, cc.variableExpr(fieldName), cc.byteSliceName,
+			cc.offsetExpr, cc.byteSliceName,
+		)
 	}
 
 	out := []string{

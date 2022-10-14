@@ -56,6 +56,7 @@ type complexeSubtable struct {
 	a, b, c int64
 	array2  []uint32 `len:"_first32"`
 	array3  []fl32   `len:"_first64"`
+	rawData []byte   `len:"_startToEnd"`
 }
 
 type arrayLike struct {

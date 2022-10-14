@@ -162,6 +162,9 @@ func parseComplexeSubtable(src []byte) (complexeSubtable, int, error) {
 
 		n += 8 + arrayLength*4
 	}
+	item.rawData = src
+	n = len(src)
+
 	return item, n, nil
 }
 
