@@ -1,16 +1,34 @@
 package analysis
 
 import (
+	"bytes"
+	"go/ast"
+	"go/format"
+	"go/types"
 	"testing"
 )
 
-func TestImportSource(t *testing.T) {
+func (an *Analyser) byName(name string) *types.Named {
+	return an.pkg.Types.Scope().Lookup(name).Type().(*types.Named)
+}
+
+func (an *Analyser) printExpr(expr ast.Expr) string {
+	var buf bytes.Buffer
+	format.Node(&buf, an.pkg.Fset, expr)
+	return buf.String()
+}
+
+func TestParseSource(t *testing.T) {
 	an, err := NewAnalyser("../test-package/defs.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if an.sourcePath == "" {
+		t.Fatal()
+	}
+
+	if len(an.commentsMap) == 0 {
 		t.Fatal()
 	}
 
@@ -21,42 +39,20 @@ func TestImportSource(t *testing.T) {
 	if len(an.interfaces) == 0 {
 		t.Fatal()
 	}
-}
 
-func TestForAliases(t *testing.T) {
-	an, err := importSource("../test-package/defs.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	an.fetchFieldAliases()
 	if len(an.forAliases) == 0 {
 		t.Fatal()
 	}
+
+	if ty := an.byName("startNoAtSubslice"); an.commentsMap[ty].startingOffset != "2" {
+		t.Fatal()
+	}
+
+	if ty := an.byName("lookup"); an.printExpr(an.forAliases[ty]["w"]) != "fl32" {
+		t.Fatal()
+	}
+
+	if ty := an.byName("subtable"); len(an.interfaces[ty.Underlying().(*types.Interface)]) != 2 {
+		t.Fatal()
+	}
 }
-
-// func TestAlias(t *testing.T) {
-// 	an, err := importSource("../test-package/defs.go")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	an.performAnalysis()
-// 	if an.structLayouts["lookup"].fields[9].type_.(withConstructor).name_ != "fl32" {
-// 		t.Fatal()
-// 	}
-// }
-
-// func TestInterfaces(t *testing.T) {
-// 	an, err := importSource("test-package/defs.go")
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-
-// 	an.performAnalysis()
-
-// 	u := an.structLayouts["withUnion"].fields[2].type_.(union)
-// 	if len(u.flags) != 2 || len(u.members) != 2 {
-// 		t.Fatal(u.flags, u.members)
-// 	}
-// }

@@ -2,6 +2,9 @@ package testpackage
 
 import "math"
 
+// binarygen: startOffset=2
+type startNoAtSubslice struct{}
+
 type varInstance struct {
 	Coords    []fl1616 `len:""`
 	Coords2   []fl1616 `len:""`

@@ -8,6 +8,24 @@ type Type interface {
 	Origin() types.Type
 }
 
+// Scope defines one step of parsing/writting,
+// which may come from several fields
+type Scope struct{}
+
+// Table is a Go struct defining the binary layout
+// of a table.
+type Table struct {
+	Origin *types.Named
+	Fields []Field
+}
+
+// Field is a struct field, where embeded fields have been resolved
+type Field struct {
+	Type   Type
+	Layout Layout
+	Name   string
+}
+
 func (an *Analyser) handleType(ty types.Type) Type {
 	if out, has := an.Types[ty]; has {
 		return out

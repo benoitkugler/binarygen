@@ -31,6 +31,9 @@ type Analyser struct {
 	// additional information used to retrieve aliases
 	forAliases syntaxFieldTypes
 
+	// additional special directives provided by comments
+	commentsMap map[*types.Named]commments
+
 	// used to link union member and indicator flag
 	unionTags map[*types.Named][]*types.Const
 
@@ -48,6 +51,7 @@ func NewAnalyser(path string) (Analyser, error) {
 	}
 
 	an.fetchSource()
+	an.fetchStructsComments()
 	an.fetchFieldAliases()
 	an.fetchUnionFlags()
 	an.fetchInterfaces()
@@ -114,6 +118,32 @@ func (an *Analyser) fetchFieldAliases() {
 				if st, isStruct := ty.Type.(*ast.StructType); isStruct {
 					named, tys := getSyntaxFields(scope, ty, st)
 					an.forAliases[named] = tys
+					return false
+				}
+			}
+			return true
+		})
+	}
+}
+
+func (an *Analyser) fetchStructsComments() {
+	an.commentsMap = make(map[*types.Named]commments)
+	scope := an.pkg.Types.Scope()
+	for _, file := range an.pkg.Syntax {
+		ast.Inspect(file, func(n ast.Node) bool {
+			if n == nil {
+				return false
+			}
+			if decl, isDecl := n.(*ast.GenDecl); isDecl {
+				if len(decl.Specs) != 1 {
+					return true
+				}
+				n = decl.Specs[0]
+				if ty, isType := n.(*ast.TypeSpec); isType {
+					typ := scope.Lookup(ty.Name.Name).Type()
+					if named, ok := typ.(*types.Named); ok {
+						an.commentsMap[named] = parseComments(decl.Doc)
+					}
 					return false
 				}
 			}
