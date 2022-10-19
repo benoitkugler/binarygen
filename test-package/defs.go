@@ -6,8 +6,8 @@ import "math"
 type startNoAtSubslice struct{}
 
 type varInstance struct {
-	Coords    []fl1616 `len:""`
-	Coords2   []fl1616 `len:""`
+	Coords    []fl1616 `arrayCount:""`
+	Coords2   []fl1616 `arrayCount:""`
 	Subfamily uint16
 
 	PSStringID uint16 `bin:"optional"`
@@ -31,10 +31,10 @@ type lookup struct {
 
 type embeded struct {
 	a, b byte
-	c    []uint16 `len:"_first16"`
+	c    []uint16 `arrayCount:"FirstUint16"`
 }
 
-type composed2 struct {
+type Composed2 struct {
 	a, b, c byte
 	embeded
 }
@@ -47,27 +47,28 @@ type composed struct {
 type simpleSubtable struct {
 	version uint16
 	x, y    int16
-	lookups []lookup `len:"_first16"`
-	array2  []uint32 `len:"_first16"`
+	lookups []lookup `arrayCount:"FirstUint16"`
+	array2  []uint32 `arrayCount:"FirstUint16"`
 }
 
 type complexeSubtable struct {
 	version uint16
 	x, y    int16
-	lookups []lookup `len:"_first16"`
+	lookups []lookup `arrayCount:"FirstUint16"`
 	u, v    float214
 	a, b, c int64
-	array2  []uint32 `len:"_first32"`
-	array3  []fl32   `len:"_first64"`
-	rawData []byte   `len:"__startToEnd"`
+	array2  []uint32 `arrayCount:"FirstUint32"`
+	array3  []fl32   `arrayCount:"FirstUint32"`
+	opaque  []byte   `isOpaque:""`
+	rawData []byte   `arrayCount:"ToEnd" subsliceStart:"AtStart"`
 }
 
 type arrayLike struct {
 	size   uint16
-	datas  []uint16   `len:"size"`
-	array  []lookup   `len:"_first16"`
-	array2 []composed `len:"_first16"`
-	data   []byte     `len:"__toEnd"`
+	datas  []uint16   `arrayCount:"ComputedField-size"`
+	array  []lookup   `arrayCount:"FirstUint16"`
+	array2 []composed `arrayCount:"FirstUint16"`
+	data   []byte     `arrayCount:"ToEnd"`
 }
 
 type tag uint32
@@ -105,16 +106,16 @@ func fl1616ToUint(f fl1616) uint32 {
 
 type withOffset struct {
 	version           uint16
-	offsetToSlice     []uint64 `offset-size:"32" len:"_first16"`
-	offsetToStruct    lookup   `offset-size:"32"`
+	offsetToSlice     []uint64 `offsetSize:"Offset32" arrayCount:"FirstUint16"`
+	offsetToStruct    lookup   `offsetSize:"Offset32"`
 	a, b, c           byte
-	offsetToUnbounded []byte `offset-size:"16" len:"__toEnd"`
+	offsetToUnbounded []byte `offsetSize:"Offset16" arrayCount:"ToEnd"`
 }
 
 type withUnion struct {
 	version    subtableVersion
 	otherField byte
-	data       subtable `version-field:"version"`
+	data       subtable `unionField:"version"`
 }
 
 type subtableVersion uint16
@@ -137,3 +138,13 @@ type subtable2 struct {
 
 func (subtable1) isSubtable() {}
 func (subtable2) isSubtable() {}
+
+// other constants not interpreted as flags
+
+type flagNotVersion_ uint
+
+const _dummy1 = ""
+
+const _dummy2 = 2
+
+const _dummy3 flagNotVersion_ = 8
