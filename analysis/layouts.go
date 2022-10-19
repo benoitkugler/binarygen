@@ -86,7 +86,7 @@ type Basic struct {
 }
 
 func (ba Basic) IsFixedSize() (BinarySize, bool) {
-	return newBinarySize(ba.origin.(*types.Basic))
+	return newBinarySize(ba.origin.Underlying().(*types.Basic))
 }
 
 // DerivedFromBasic is stored as a an uintXX, but
