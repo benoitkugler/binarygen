@@ -17,7 +17,10 @@ import (
 // Analyser provides information about types,
 // shared by the parser and writer code generator
 type Analyser struct {
-	sourcePath string
+	// Source is the path of the origin go source file.
+	Source string
+
+	absSourcePath string
 
 	pkg *packages.Package
 
@@ -47,7 +50,7 @@ type Analyser struct {
 
 // load the source go file with go/packages
 func importSource(path string) (Analyser, error) {
-	path, err := filepath.Abs(path)
+	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return Analyser{}, err
 	}
@@ -55,7 +58,7 @@ func importSource(path string) (Analyser, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedTypes | packages.NeedSyntax | packages.NeedName | packages.NeedFiles | packages.NeedDeps | packages.NeedImports,
 	}
-	tmp, err := packages.Load(cfg, "file="+path)
+	tmp, err := packages.Load(cfg, "file="+absPath)
 	if err != nil {
 		return Analyser{}, err
 	}
@@ -65,8 +68,9 @@ func importSource(path string) (Analyser, error) {
 
 	pkg := tmp[0]
 	out := Analyser{
-		sourcePath: path,
-		pkg:        pkg,
+		Source:        path,
+		absSourcePath: absPath,
+		pkg:           pkg,
 	}
 
 	return out, nil
@@ -109,6 +113,8 @@ func getSyntaxFields(scope *types.Scope, ty *ast.TypeSpec, st *ast.StructType) (
 	}
 	return named, fieldTypes
 }
+
+func (an *Analyser) PackageName() string { return an.pkg.Name }
 
 // go/types erase alias information, so we add it in a preliminary step
 func (an *Analyser) fetchFieldAliases() {
@@ -170,7 +176,7 @@ func (an *Analyser) fetchSource() {
 		ty := obj.Type()
 		if _, isStruct := ty.Underlying().(*types.Struct); isStruct {
 			// filter by input file
-			if an.pkg.Fset.File(obj.Pos()).Name() == an.sourcePath {
+			if an.pkg.Fset.File(obj.Pos()).Name() == an.absSourcePath {
 				an.Sources = append(an.Sources, ty.(*types.Named))
 			}
 		}
@@ -342,7 +348,7 @@ func (an *Analyser) createFromBasic(ty types.Type, decl ast.Expr) Type {
 	name := an.resolveName(ty, decl)
 	if binaryType, hasConstructor := an.constructors[name]; hasConstructor {
 		size, _ := newBinarySize(binaryType)
-		return DerivedFromBasic{origin: ty, name: name, size: size}
+		return DerivedFromBasic{origin: ty, Name: name, Size: size}
 	}
 
 	return Basic{origin: ty}

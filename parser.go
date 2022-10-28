@@ -488,7 +488,7 @@ func (u union) parser(cc codeContext, dstSelector string) string {
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = parse%s(%s[%s:], %s)`,
 			flag.Name(), cc.variableExpr(dstSelector), strings.Title(member.name()), cc.byteSliceName,
-			cc.offsetExpr, argumentsList(member.requiredArgs()), // TODO: if needed handle args
+			cc.offsetExpr, argumentsList(member.requiredArgs()),
 		))
 	}
 	kindVariable := cc.variableExpr(u.flagFieldName)

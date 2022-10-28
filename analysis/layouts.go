@@ -95,17 +95,17 @@ func (ba Basic) IsFixedSize() (BinarySize, bool) {
 type DerivedFromBasic struct {
 	origin types.Type // may be named, but with underlying Basic
 
-	// For aliases, it is the name of the defined (not the "underlying" type)
-	// For named types, the name of the defined type
+	// For aliases, it is the Name of the defined (not the "underlying" type)
+	// For named types, the Name of the defined type
 	// Otherwise, it is the string representation
-	name string
+	Name string
 
-	// the size as read and written in binary files
-	size BinarySize
+	// Size is the size as read and written in binary files
+	Size BinarySize
 }
 
 func (de DerivedFromBasic) IsFixedSize() (BinarySize, bool) {
-	return de.size, true
+	return de.Size, true
 }
 
 // Offset is a fixed size integer pointing to

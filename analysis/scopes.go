@@ -15,6 +15,16 @@ type SingleField Field
 // StaticSizedFields is a list of fields which all have a static size.
 type StaticSizedFields []Field
 
+// Size return the cumulated size of all fields
+func (fs StaticSizedFields) Size() BinarySize {
+	var out BinarySize
+	for _, field := range fs {
+		s, _ := field.Type.IsFixedSize()
+		out += s
+	}
+	return out
+}
+
 func (st Struct) Scopes() (out []Scope) {
 	// as an optimization groups the contiguous fixed-size fields
 	var fixedSize StaticSizedFields
