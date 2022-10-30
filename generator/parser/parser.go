@@ -35,6 +35,15 @@ func readBasicTypeAt(cc gen.Context, size an.BinarySize) string {
 //	- length dependent on the runtime length of an array
 //	- length depends on external condition (optional fields)
 
+// check for <length> (from the start of the slice)
+func lengthCheck(cc gen.Context, length gen.Expression) string {
+	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", %s, L)`, length))
+	return fmt.Sprintf(`if L := len(%s); L < %s {
+		%s
+	}
+	`, cc.Slice, length, errReturn)
+}
+
 // check for <offset> + <size>, where size is known at compile time
 func staticLengthCheckAt(cc gen.Context, size an.BinarySize) string {
 	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %d, got %%d", L)`, size))
@@ -46,11 +55,7 @@ func staticLengthCheckAt(cc gen.Context, size an.BinarySize) string {
 // check for <offset> + <count>*<size>, where size is known at compile time
 func affineLengthCheckAt(cc gen.Context, count gen.Expression, size an.BinarySize) string {
 	lengthExpr := cc.Offset.WithAffine(count, size)
-	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", %s, L)`, lengthExpr))
-	return fmt.Sprintf(`if L := len(%s); L < %s {
-		%s
-	}
-	`, cc.Slice, lengthExpr, errReturn)
+	return lengthCheck(cc, lengthExpr)
 }
 
 type conditionalField struct {

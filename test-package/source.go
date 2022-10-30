@@ -38,10 +38,10 @@ func (subtableITF1) isSubtableITF() {}
 func (subtableITF2) isSubtableITF() {}
 
 // Used to test Offset support
-type withOffset struct {
+type WithOffset struct {
 	version           uint16
-	offsetToSlice     []uint64      `offsetSize:"Offset32" arrayCount:"FirstUint16"`
-	offsetToStruct    withFixedSize `offsetSize:"Offset32"`
+	offsetToSlice     []uint64 `offsetSize:"Offset32" arrayCount:"FirstUint16"`
+	offsetToStruct    varSize  `offsetSize:"Offset32"`
 	a, b, c           byte
 	offsetToUnbounded []byte `offsetSize:"Offset16" arrayCount:"ToEnd"`
 }

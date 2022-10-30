@@ -314,7 +314,10 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		// adjust the tags and "recurse" to the actual type
 		tags.offsetSize = NoOffset
 		target := an.createTypeFor(ty, tags, decl)
-		return Offset{target: target, size: offset.binary()}
+		if _, isFixedSize := target.IsFixedSize(); isFixedSize {
+			panic("offset to fixed size type is not supported")
+		}
+		return Offset{Target: target, Size: offset.binary()}
 	}
 
 	// now inspect the actual go type

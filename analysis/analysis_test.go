@@ -96,17 +96,17 @@ func TestConstructors(t *testing.T) {
 }
 
 func TestOffset(t *testing.T) {
-	ty := ana.Tables[ana.byName("withOffset")]
+	ty := ana.Tables[ana.byName("WithOffset")]
 	o1 := ty.Fields[1].Type
 	o2 := ty.Fields[2].Type
 	o3 := ty.Fields[6].Type
-	if o1.(Offset).size != Uint32 {
+	if o1.(Offset).Size != Uint32 {
 		t.Fatal(o1)
 	}
-	if o2.(Offset).size != Uint32 {
+	if o2.(Offset).Size != Uint32 {
 		t.Fatal(o2)
 	}
-	if o3.(Offset).size != Uint16 {
+	if o3.(Offset).Size != Uint16 {
 		t.Fatal(o3)
 	}
 }

@@ -45,7 +45,7 @@ type Type interface {
 func (t Struct) Origin() types.Type           { return t.origin }
 func (t Basic) Origin() types.Type            { return t.origin }
 func (t DerivedFromBasic) Origin() types.Type { return t.origin }
-func (t Offset) Origin() types.Type           { return t.target.Origin() }
+func (t Offset) Origin() types.Type           { return t.Target.Origin() }
 func (t Array) Origin() types.Type            { return t.origin }
 func (t Slice) Origin() types.Type            { return t.origin }
 func (t Union) Origin() types.Type            { return t.origin }
@@ -109,10 +109,13 @@ func (de DerivedFromBasic) IsFixedSize() (BinarySize, bool) {
 }
 
 // Offset is a fixed size integer pointing to
-// an other type.
+// an other type, which has never a fixed size.
 type Offset struct {
-	target Type
-	size   BinarySize // of the offset field
+	// Target if the type the offset is pointing at
+	Target Type
+
+	// Size if the size of the offset field
+	Size BinarySize
 }
 
 // IsFixedSize returns `false`, since, even if the offset itself has a fixed size,

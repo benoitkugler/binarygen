@@ -14,6 +14,21 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 		return parserForSlice(field, cc)
 	case an.Opaque:
 		return parserForOpaque(field, cc)
+	case an.Offset:
+		return parserForOffset(field, cc)
+	case an.Struct:
+		return fmt.Sprintf(`var (
+			err error
+			read int
+		)
+		%s, read, err = parse%s(%s)
+		if err != nil {
+			%s 
+		}
+		%s
+		`, cc.Selector(field.Name), strings.Title(gen.Name(field.Type)), cc.Slice,
+			cc.ErrReturn("err"),
+			cc.Offset.UpdateStatementDynamic("read"))
 	}
 	return ""
 }
@@ -36,6 +51,8 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 	)
 }
 
+// ------------------------- slices -------------------------
+
 // we distinguish the following cases for a Slice :
 //   - elements have a static sized : we can check the length early
 //     and use mustParse on each element
@@ -48,7 +65,7 @@ func parserForSlice(field an.Field, cc *gen.Context) string {
 	// no matter the kind of element, resolve the count...
 	countExpr, countCode := codeForSliceCount(sl, field.Name, cc)
 
-	// ... and the start offset
+	// ... and adjust the start offset
 	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
 		cc.Offset = gen.NewOffset(cc.Offset.Name, 0)
 	}
@@ -199,4 +216,31 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 		cc.Selector(fieldName), cc.Selector(fieldName),
 		cc.Offset.SetStatement("offset"),
 	)
+}
+
+// ------------------------ Offsets ------------------------
+
+func parserForOffset(fi an.Field, cc *gen.Context) string {
+	of := fi.Type.(an.Offset)
+	var statements []string
+	// Step 1 - check the length for the offset integer value
+	statements = append(statements, staticLengthCheckAt(*cc, of.Size))
+	// Step 2 - read the offset value
+	statements = append(statements, fmt.Sprintf("offset := int(%s)", readBasicTypeAt(*cc, of.Size)))
+	cc.Offset.Increment(of.Size)
+	// generally speaking with have to update the main offset as well
+	statements = append(statements, cc.Offset.UpdateStatement(of.Size))
+	// Step 3 - check the length for the pointed value
+	statements = append(statements, lengthCheck(*cc, "offset"))
+
+	// Step 4 - finally delegate to the target parser
+	savedOffset := cc.Offset
+	cc.Offset = gen.NewOffsetDynamic("offset")
+	statements = append(statements, parserForVariableSize(an.Field{
+		Type:   of.Target,
+		Layout: fi.Layout,
+		Name:   fi.Name,
+	}, cc))
+	cc.Offset = savedOffset
+	return strings.Join(statements, "\n")
 }
