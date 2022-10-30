@@ -149,7 +149,7 @@ type declaration struct {
 
 type codeContext struct {
 	// <variableName> = parse<typeName>(<byteSliceName>)
-	// <byteSliceName> = appendTo(<variableName>, <byteSliceName>)
+	// <byteSliceName> = append<typeName>To(<variableName>, <byteSliceName>)
 	typeName      string // the name of the type being generated
 	objectName    string // the go struct being parsed or dumped
 	byteSliceName string // the name of the []byte being read or written
