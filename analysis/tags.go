@@ -129,7 +129,7 @@ const (
 	ComputedField
 
 	// For raw data, that is slice of bytes, this special value
-	// indicates that the data must copied until the end of the
+	// indicates that the data must be copied until the end of the
 	// given slice
 	ToEnd
 )

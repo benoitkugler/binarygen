@@ -12,7 +12,7 @@ var ana Analyser
 
 func init() {
 	var err error
-	ana, err = NewAnalyser("../test-package/defs.go")
+	ana, err = NewAnalyser("../test-package/source.go")
 	if err != nil {
 		panic(err)
 	}
@@ -61,18 +61,25 @@ func TestStartingOffset(t *testing.T) {
 }
 
 func TestAliases(t *testing.T) {
-	if ty := ana.byName("lookup"); ana.printExpr(ana.forAliases[ty]["w"]) != "fl32" {
+	if ty := ana.byName("withAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
 		t.Fatal()
 	}
 
-	u := ana.Tables[ana.byName("lookup")].Fields[9]
+	u := ana.Tables[ana.byName("withAlias")].Fields[0]
 	if derived := u.Type.(DerivedFromBasic); derived.Name != "fl32" {
 		t.Fatal()
 	}
 }
 
+func TestOpaque(t *testing.T) {
+	fi := ana.Tables[ana.byName("WithOpaque")].Fields[1]
+	if _, isOpaque := fi.Type.(Opaque); !isOpaque {
+		t.Fatal()
+	}
+}
+
 func TestInterfaces(t *testing.T) {
-	if ty := ana.byName("subtable"); len(ana.interfaces[ty.Underlying().(*types.Interface)]) != 2 {
+	if ty := ana.byName("subtableITF"); len(ana.interfaces[ty.Underlying().(*types.Interface)]) != 2 {
 		t.Fatal()
 	}
 
@@ -105,17 +112,21 @@ func TestOffset(t *testing.T) {
 }
 
 func TestRawdata(t *testing.T) {
-	ty := ana.Tables[ana.byName("complexeSubtable")]
+	ty := ana.Tables[ana.byName("WithRawdata")]
 
-	rawDataField := ty.Fields[len(ty.Fields)-1]
-	if rawDataField.Layout.SubsliceStart != AtStart {
-		t.Fatal()
-	}
-	if !rawDataField.Type.(Slice).IsRawData() {
-		t.Fatal()
+	for _, fi := range ty.Fields {
+		if !fi.Type.(Slice).IsRawData() {
+			t.Fatal()
+		}
 	}
 
-	if sliceField := ty.Fields[3].Type.(Slice); sliceField.IsRawData() {
+	startTo := ty.Fields[1]
+	if startTo.Layout.SubsliceStart != AtStart {
+		t.Fatal()
+	}
+
+	startToEnd := ty.Fields[3]
+	if startToEnd.Type.(Slice).Count != ToEnd {
 		t.Fatal()
 	}
 }
