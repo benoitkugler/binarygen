@@ -36,23 +36,16 @@ func readBasicTypeAt(cc gen.Context, size an.BinarySize) string {
 //	- length depends on external condition (optional fields)
 
 // check for <offset> + <size>, where size is known at compile time
-func staticLengthCheckAt(size an.BinarySize, cc gen.Context) string {
+func staticLengthCheckAt(cc gen.Context, size an.BinarySize) string {
 	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %d, got %%d", L)`, size))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
 		%s
-	}
-	`, cc.Slice, cc.Offset.With(size), errReturn)
+	}`, cc.Slice, cc.Offset.With(size), errReturn)
 }
 
-type affine struct {
-	offset      gen.Expression
-	lengthName  gen.Expression
-	elementSize int
-}
-
-// check for <offset> + <elementSize> * <lengthName>
-func affineLengthCheck(args affine, cc gen.Context) string {
-	lengthExpr := gen.ArrayOffset(args.offset, args.lengthName, args.elementSize)
+// check for <offset> + <count>*<size>, where size is known at compile time
+func affineLengthCheckAt(cc gen.Context, count gen.Expression, size an.BinarySize) string {
+	lengthExpr := cc.Offset.WithAffine(count, size)
 	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", %s, L)`, lengthExpr))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
 		%s

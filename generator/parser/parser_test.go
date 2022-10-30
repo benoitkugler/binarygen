@@ -28,23 +28,26 @@ func Test_staticLengthCheck_code(t *testing.T) {
 	}
 	tests := []analysis.BinarySize{1, 5, 12}
 	for _, sl := range tests {
-		got := staticLengthCheckAt(sl, cc)
+		got := staticLengthCheckAt(cc, sl)
 		assertParseBlock(t, got)
 	}
 }
 
 func Test_affineLengthCheck_code(t *testing.T) {
 	cc := gen.Context{
-		Type:  "lookup",
-		Slice: "data",
+		Type:   "lookup",
+		Slice:  "data",
+		Offset: gen.NewOffset("n", 0),
 	}
-	tests := []affine{
-		{"", "L2", 4},
-		{"offset", "", 0},
-		{"2", "L2", 5},
+	tests := []struct {
+		count gen.Expression
+		size  analysis.BinarySize
+	}{
+		{"L2", 4},
+		{"L2", 5},
 	}
 	for _, sl := range tests {
-		got := affineLengthCheck(sl, cc)
+		got := affineLengthCheckAt(cc, sl.count, sl.size)
 		assertParseBlock(t, got)
 	}
 }

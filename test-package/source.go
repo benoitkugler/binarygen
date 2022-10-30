@@ -86,3 +86,14 @@ type WithOpaque struct {
 	f      uint16
 	opaque customType `isOpaque:""`
 }
+
+type WithSlices struct {
+	length uint16
+	s1     []varSize `arrayCount:"ComputedField-length"`
+}
+
+type varSize struct {
+	f1     uint32
+	array  []uint32    `arrayCount:"FirstUint16"`
+	stucts []withAlias `arrayCount:"FirstUint32"`
+}

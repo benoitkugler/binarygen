@@ -2,6 +2,8 @@ package generator
 
 import (
 	"fmt"
+	"go/types"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -52,6 +54,8 @@ func (db Buffer) filterUnused() []Declaration {
 			filtered = append(filtered, decl)
 		}
 	}
+
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].ID < filtered[j].ID })
 	return filtered
 }
 
@@ -71,6 +75,16 @@ type Declaration struct {
 	ID         string
 	Content    string
 	IsExported bool
+}
+
+// Name returns the representation of the given type in generated code,
+// either its local name or its String
+func Name(ty analysis.Type) string {
+	if named, isNamed := ty.Origin().(*types.Named); isNamed {
+		return named.Obj().Name()
+	}
+
+	return ty.Origin().String()
 }
 
 // Expression is a Go expression, such as a variable name, a static number, or an expression
@@ -150,6 +164,10 @@ func NewOffset(name Expression, initialValue int) Offset {
 	return Offset{Name: name, value: initialValue}
 }
 
+func NewOffsetDynamic(name Expression) Offset {
+	return Offset{Name: name, value: -1}
+}
+
 // Value returns the optimal Go expression for the offset current value.
 func (of Offset) Value() Expression {
 	if of.value != -1 {
@@ -162,12 +180,24 @@ func (of Offset) Value() Expression {
 
 // With returns the optimal expression for <offset> + <size>
 func (of Offset) With(size analysis.BinarySize) Expression {
-	of.value += int(size)
-	return of.Value()
+	if of.value != -1 {
+		of.value += int(size) // not the copy, so the receiver is not modified
+		return of.Value()
+	}
+	return fmt.Sprintf("%s + %d", of.Name, size)
 }
 
-// Increment updates the current value, adding [size]
+// WithAffine returns the optimal expression for <offset> + <count>*<size>
+func (of Offset) WithAffine(count Expression, size analysis.BinarySize) Expression {
+	return arrayOffsetExpr(of.Value(), count, int(size))
+}
+
+// Increment updates the current value, adding [size].
+// It is a no-op if the tracked value is unknown.
 func (of *Offset) Increment(size analysis.BinarySize) {
+	if of.value == -1 {
+		return
+	}
 	of.value += int(size)
 }
 
@@ -178,8 +208,15 @@ func (of Offset) UpdateStatement(size analysis.BinarySize) Expression {
 	return fmt.Sprintf("%s += %d", of.Name, size)
 }
 
+// UpdateStatementDynamic returns a statement for <offset> += size,
+// and remove the tracked value which is now unknown.
+func (of *Offset) UpdateStatementDynamic(size Expression) Expression {
+	of.value = -1
+	return fmt.Sprintf("%s += %s", of.Name, size)
+}
+
 // SetStatement returns the code for <offset> = <value>,
-// and remove the tracked value wich is now unknown
+// and remove the tracked value which is now unknown
 func (of *Offset) SetStatement(value Expression) Expression {
 	of.value = -1
 	return fmt.Sprintf("%s = %s", of.Name, value)

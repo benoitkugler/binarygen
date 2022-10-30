@@ -32,7 +32,7 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 	%s
 	`, cc.Selector(field.Name), cc.Slice, start,
 		cc.ErrReturn("err"),
-		cc.Offset.SetStatement("n + read"),
+		cc.Offset.UpdateStatementDynamic("read"),
 	)
 }
 
@@ -49,24 +49,20 @@ func parserForSlice(field an.Field, cc *gen.Context) string {
 	countExpr, countCode := codeForSliceCount(sl, field.Name, cc)
 
 	// ... and the start offset
-	start := cc.Offset.Value()
 	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
-		start = ""
+		cc.Offset = gen.NewOffset(cc.Offset.Name, 0)
 	}
 
 	codes := []string{countCode}
 
-	// special case for bytes data
-	if sl.IsRawData() {
-		codes = append(codes, parserForSliceBytes(sl, cc, start, countExpr, field.Name))
+	if sl.IsRawData() { // special case for bytes data
+		codes = append(codes, parserForSliceBytes(sl, cc, countExpr, field.Name))
+	} else if _, isFixedSize := sl.Elem.IsFixedSize(); isFixedSize { // else, check for fixed size elements
+		codes = append(codes, parserForSliceFixedSizeElement(sl, cc, countExpr, field.Name))
+	} else {
+		codes = append(codes, parserForSliceVariableSizeElement(sl, cc, countExpr, field.Name))
 	}
 
-	// // else, check for fixed size elements
-	// if _, isFixedSize := sl.Elem.IsFixedSize(); isFixedSize {
-	// 	return parserForSliceFixedSizeElement(cc, selector)
-	// }
-
-	// return parserForSliceVariableSizeElement(cc, selector)
 	return strings.Join(codes, "\n")
 }
 
@@ -83,11 +79,12 @@ func codeForSliceCount(sl an.Slice, fieldName string, cc *gen.Context) (countVar
 			size = an.Uint32
 		}
 		// 1 - check the length
-		statements = append(statements, staticLengthCheckAt(size, *cc))
+		statements = append(statements, staticLengthCheckAt(*cc, size))
 		// 2 - read the value
 		statements = append(statements, fmt.Sprintf("%s := int(%s)", countVar, readBasicTypeAt(*cc, size)))
 		// 3 - increment the offset value
 		cc.Offset.Increment(size)
+		statements = append(statements, cc.Offset.UpdateStatement(size))
 	case an.ComputedField:
 		countVar = "arrayLength"
 		statements = append(statements, fmt.Sprintf("%s := int(%s)", countVar, cc.Selector(sl.CountExpr)))
@@ -98,9 +95,9 @@ func codeForSliceCount(sl an.Slice, fieldName string, cc *gen.Context) (countVar
 	return countVar, strings.Join(statements, "\n")
 }
 
-func parserForSliceBytes(sl an.Slice, cc *gen.Context, start gen.Expression, count gen.Expression, fieldName string) string {
+func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fieldName string) string {
 	target := cc.Selector(fieldName)
-
+	start := cc.Offset.Value()
 	// special case for ToEnd : do not use an intermediate variable
 	if sl.Count == an.ToEnd {
 		readStatement := fmt.Sprintf("%s = %s[%s:]", target, cc.Slice, start)
@@ -126,41 +123,80 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, start gen.Expression, cou
 	)
 }
 
-// func parserForSliceUnbounded(sl an.Slice, cc gen.Context, selector string, layout an.Layout) {
-// 	if sl.lengthLocation == "__toEnd" {
-// 		return fmt.Sprintf(`%s = %s[%s:]
-// 			%s = len(%s)
-// 			`, cc.variableExpr(fieldName), cc.byteSliceName, cc.offsetExpr,
-// 			cc.offsetExpr, cc.byteSliceName,
-// 		)
-// 	} else if sl.lengthLocation == "__startToEnd" {
-// 		return fmt.Sprintf(`%s = %s
-// 			%s = len(%s)
-// 			`, cc.variableExpr(fieldName), cc.byteSliceName,
-// 			cc.offsetExpr, cc.byteSliceName,
-// 		)
-// 	} else {
-// 		var fieldLength, sliceExpr string
-// 		if strings.HasPrefix(sl.lengthLocation, "__to") {
-// 			fieldLength = strings.TrimPrefix(sl.lengthLocation, "__to_")
-// 			sliceExpr = fmt.Sprintf("%s:%s", cc.offsetExpr, cc.variableExpr(fieldLength))
-// 		} else {
-// 			fieldLength = strings.TrimPrefix(sl.lengthLocation, "__startTo_")
-// 			sliceExpr = fmt.Sprintf(":%s", cc.variableExpr(fieldLength))
-// 		}
-// 		errorStatement := fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", L, len(%s))`, cc.byteSliceName)
-// 		return fmt.Sprintf(`
-// 			L := int(%s)
-// 			if len(%s) < L {
-// 				%s
-// 			}
-// 			%s = %s[%s]
-// 			%s = L
-// 			`, cc.variableExpr(fieldLength),
-// 			cc.byteSliceName,
-// 			cc.returnError(errorStatement),
-// 			cc.variableExpr(fieldName), cc.byteSliceName, sliceExpr,
-// 			cc.offsetExpr,
-// 		)
-// 	}
-// }
+// The field is a slice of structs (or basic type), whose size is known at compile time.
+// We can thus check for the whole slice length, and use mustParseXXX functions.
+// The generated code will look like
+//
+//	if len(data) < n + arrayLength * size {
+//		return err
+//	}
+//	out = make([]MorxChain, arrayLength)
+//	for i := range out {
+//		out[i] = mustParseMorxChain(data[])
+//	}
+//	n += arrayLength * size
+func parserForSliceFixedSizeElement(sl an.Slice, cc *gen.Context, count gen.Expression, fieldName string) string {
+	target := cc.Selector(fieldName)
+	out := []string{""}
+
+	// step 1 : check the expected length
+	elementSize, _ := sl.Elem.IsFixedSize()
+	out = append(out, affineLengthCheckAt(*cc, count, elementSize))
+
+	// step 2 : allocate the slice - it is garded by the check above
+	out = append(out, fmt.Sprintf("%s = make([]%s, %s) // allocation guarded by the previous check",
+		target, gen.Name(sl.Elem), count))
+
+	// step 3 : loop to parse every elements,
+	// temporarily chaning the offset
+	startOffset := cc.Offset
+	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
+	loopBody := mustParser(sl.Elem, *cc, fmt.Sprintf("%s[i]", fieldName))
+	out = append(out, fmt.Sprintf(`for i := range %s {
+		%s
+	}`, target, loopBody))
+
+	// step 4 : update the offset
+	cc.Offset = startOffset
+	out = append(out,
+		cc.Offset.UpdateStatementDynamic(fmt.Sprintf("%s * %d", count, elementSize)))
+
+	return strings.Join(out, "\n")
+}
+
+// The field is a slice of structs, whose size is only known at run time
+// The generated code will look like
+//
+//	offset := 2
+//	for i := 0; i < arrayLength; i++ {
+//		chain, read, err := parseMorxChain(data[offset:])
+//		if err != nil {
+//			return nil, err
+//		}
+//		out = append(out, chain)
+//		offset += read
+//	}
+//	n = offset
+func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.Expression, fieldName string) string {
+	// if start is a constant, we have to use an additional variable
+
+	// loop and update the offset
+	return fmt.Sprintf(`
+		offset := %s
+		for i := 0; i < %s; i++ {
+		elem, read, err := parse%s(%s[offset:])
+		if err != nil {
+			%s
+		}
+		%s = append(%s, elem)
+		offset += read
+		}
+		%s`,
+		cc.Offset.Value(),
+		count,
+		strings.Title(gen.Name(sl.Elem)), cc.Slice,
+		cc.ErrReturn("err"),
+		cc.Selector(fieldName), cc.Selector(fieldName),
+		cc.Offset.SetStatement("offset"),
+	)
+}

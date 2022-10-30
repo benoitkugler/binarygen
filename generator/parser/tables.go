@@ -76,15 +76,14 @@ func parser(scope an.Scope, cc *gen.Context) string {
 // add the length check
 func parserForFixedSize(fs an.StaticSizedFields, cc *gen.Context) string {
 	totalSize := fs.Size()
-	fields := mustParserFields(fs, cc)
-	updateOffset := cc.Offset.UpdateStatement(totalSize)
 	return fmt.Sprintf(`%s
 		%s
 		%s
 	`,
-		staticLengthCheckAt(totalSize, *cc),
-		fields,
-		updateOffset)
+		staticLengthCheckAt(*cc, totalSize),
+		mustParserFields(fs, cc),
+		cc.Offset.UpdateStatement(totalSize),
+	)
 }
 
 // delegate to the type

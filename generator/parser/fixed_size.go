@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"go/types"
 	"strings"
 
 	an "github.com/benoitkugler/binarygen/analysis"
@@ -32,10 +31,7 @@ func mustParserBasic(bt an.Basic, cc gen.Context, selector string) string {
 	size, _ := bt.IsFixedSize()
 	readCode := readBasicTypeAt(cc, size)
 
-	name := bt.Origin().String()
-	if named, isNamed := bt.Origin().(*types.Named); isNamed {
-		name = named.Obj().Name()
-	}
+	name := gen.Name(bt)
 
 	switch name {
 	case "uint8", "byte", "uint16", "uint32", "uint64": // simplify by removing the unnecessary conversion
@@ -107,7 +103,7 @@ func mustParserFieldsFunction(fs an.StaticSizedFields, cc gen.Context) (mustPars
 	`, cc.ObjectVar, cc.Type, cc.Slice, mustParseBody)
 
 	// for the parsing function: check length, call mustParse, and update the offset
-	check := staticLengthCheckAt(fs.Size(), cc)
+	check := staticLengthCheckAt(cc, fs.Size())
 	mustParseCall := fmt.Sprintf("%s.mustParse(%s)", cc.ObjectVar, cc.Slice)
 	updateOffset := cc.Offset.UpdateStatement(fs.Size())
 
