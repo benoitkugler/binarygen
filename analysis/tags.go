@@ -9,7 +9,7 @@ import (
 
 // parsedTags is the result of parsing a field tag string
 type parsedTags struct {
-	arrayCountField string // used by [ComputedField]
+	arrayCountField string // used by [ComputedField], [ToComputedField]
 	arrayCount      ArrayCount
 
 	subsliceStart SubsliceStart
@@ -43,6 +43,9 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 	default:
 		if _, field, hasComputedField := strings.Cut(tag, "ComputedField-"); hasComputedField {
 			out.arrayCount = ComputedField
+			out.arrayCountField = field
+		} else if _, field, hasToField := strings.Cut(tag, "To-"); hasToField {
+			out.arrayCount = ToComputedField
 			out.arrayCountField = field
 		} else if tag == "" {
 			// default to NoLength
@@ -132,6 +135,12 @@ const (
 	// indicates that the data must be copied until the end of the
 	// given slice
 	ToEnd
+
+	// For raw data, that is slice of bytes, this special value
+	// indicates that the data must be copied until the offset (not the length)
+	// given by an other field, parsed previously,
+	// or computed by a method or an expression
+	ToComputedField
 )
 
 // SubsliceStart indicates where the start of the subslice

@@ -109,7 +109,7 @@ func codeForSliceCount(sl an.Slice, fieldName string, cc *gen.Context) (countVar
 	case an.ComputedField:
 		countVar = "arrayLength"
 		statements = append(statements, fmt.Sprintf("%s := int(%s)", countVar, cc.Selector(sl.CountExpr)))
-	case an.ToEnd:
+	case an.ToEnd, an.ToComputedField:
 		// count is ignored in this case
 	}
 
@@ -126,21 +126,25 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 		return readStatement + "\n" + offsetStatemtent
 	}
 
+	lengthDefinition := fmt.Sprintf("L := int(%s + %s)", start, count)
+	if sl.Count == an.ToComputedField { // the length is not relative to the start
+		lengthDefinition = fmt.Sprintf("L := int(%s)", cc.Selector(sl.CountExpr))
+	}
+
 	errorStatement := fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", L, len(%s))`, cc.Slice)
-	offsetStatement := cc.Offset.SetStatement("L")
 	return fmt.Sprintf(` 
-			L := int(%s + %s)
+			%s
 			if len(%s) < L {
 				%s
 			}
 			%s = %s[%s:L]
 			%s
 			`,
-		start, count,
+		lengthDefinition,
 		cc.Slice,
 		cc.ErrReturn(errorStatement),
 		target, cc.Slice, start,
-		offsetStatement,
+		cc.Offset.SetStatement("L"),
 	)
 }
 

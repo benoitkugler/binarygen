@@ -73,9 +73,13 @@ func mustParserArray(ar an.Array, cc gen.Context, selector string) string {
 // returns the reading instructions, without bounds check
 // it can be used for example when parsing a slice of such fields
 func mustParserFields(fs an.StaticSizedFields, cc *gen.Context) string {
-	code := []string{
-		fmt.Sprintf("_ = %s[%s] // early bound checking", cc.Slice, cc.Offset.With(fs.Size()-1)),
+	var code []string
+
+	// optimize following slice access
+	if len(fs) >= 2 {
+		code = append(code, fmt.Sprintf("_ = %s[%s] // early bound checking", cc.Slice, cc.Offset.With(fs.Size()-1)))
 	}
+
 	for _, field := range fs {
 		code = append(code, mustParser(field.Type, *cc, field.Name))
 

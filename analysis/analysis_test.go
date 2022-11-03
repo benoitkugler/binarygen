@@ -119,19 +119,24 @@ func TestOffset(t *testing.T) {
 func TestRawdata(t *testing.T) {
 	ty := ana.Tables[ana.byName("WithRawdata")]
 
-	for _, fi := range ty.Fields {
+	for _, fi := range ty.Fields[1:] {
 		if !fi.Type.(Slice).IsRawData() {
 			t.Fatal()
 		}
 	}
 
-	startTo := ty.Fields[1]
+	startTo := ty.Fields[2]
 	if startTo.Layout.SubsliceStart != AtStart {
 		t.Fatal()
 	}
 
-	startToEnd := ty.Fields[3]
+	startToEnd := ty.Fields[4]
 	if startToEnd.Type.(Slice).Count != ToEnd {
+		t.Fatal()
+	}
+
+	startToOffset := ty.Fields[5]
+	if startToOffset.Type.(Slice).Count != ToComputedField {
 		t.Fatal()
 	}
 }

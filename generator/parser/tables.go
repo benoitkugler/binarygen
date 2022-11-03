@@ -72,8 +72,7 @@ func parser(scope an.Scope, cc *gen.Context) string {
 		panic("exhaustive type switch")
 	}
 	return fmt.Sprintf(`{
-		%s
-	}`, code)
+		%s}`, code)
 }
 
 // add the length check
@@ -82,7 +81,7 @@ func parserForFixedSize(fs an.StaticSizedFields, cc *gen.Context) string {
 	return fmt.Sprintf(`%s
 		%s
 		%s
-	`,
+		`,
 		staticLengthCheckAt(*cc, totalSize),
 		mustParserFields(fs, cc),
 		cc.Offset.UpdateStatement(totalSize),

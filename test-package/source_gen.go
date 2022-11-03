@@ -14,10 +14,8 @@ func ParseShiftedLayout(src []byte) (ShiftedLayout, int, error) {
 		if L := len(src); L < 2 {
 			return ShiftedLayout{}, 0, fmt.Errorf("EOF: expected length: 2, got %d", L)
 		}
-		_ = src[1] // early bound checking
 		item.version = shiftedVersion(binary.BigEndian.Uint16(src[0:]))
 		n += 2
-
 	}
 	{
 		var (
@@ -36,7 +34,6 @@ func ParseShiftedLayout(src []byte) (ShiftedLayout, int, error) {
 			return ShiftedLayout{}, 0, err
 		}
 		n = read
-
 	}
 	return item, n, nil
 }
@@ -48,10 +45,8 @@ func ParseWithOffset(src []byte) (WithOffset, int, error) {
 		if L := len(src); L < 2 {
 			return WithOffset{}, 0, fmt.Errorf("EOF: expected length: 2, got %d", L)
 		}
-		_ = src[1] // early bound checking
 		item.version = binary.BigEndian.Uint16(src[0:])
 		n += 2
-
 	}
 	{
 		if L := len(src); L < 6 {
@@ -98,7 +93,6 @@ func ParseWithOffset(src []byte) (WithOffset, int, error) {
 			return WithOffset{}, 0, err
 		}
 		offset += read
-
 	}
 	{
 		if L := len(src); L < 13 {
@@ -109,7 +103,6 @@ func ParseWithOffset(src []byte) (WithOffset, int, error) {
 		item.b = src[11]
 		item.c = src[12]
 		n += 3
-
 	}
 	{
 		if L := len(src); L < 15 {
@@ -134,10 +127,8 @@ func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 		if L := len(src); L < 2 {
 			return WithOpaque{}, 0, fmt.Errorf("EOF: expected length: 2, got %d", L)
 		}
-		_ = src[1] // early bound checking
 		item.f = binary.BigEndian.Uint16(src[0:])
 		n += 2
-
 	}
 	{
 
@@ -146,7 +137,6 @@ func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 			return WithOpaque{}, 0, err
 		}
 		n += read
-
 	}
 	return item, n, nil
 }
@@ -155,14 +145,20 @@ func ParseWithRawdata(src []byte, defautCount int, startToCount int) (WithRawdat
 	var item WithRawdata
 	n := 0
 	{
+		if L := len(src); L < 4 {
+			return WithRawdata{}, 0, fmt.Errorf("EOF: expected length: 4, got %d", L)
+		}
+		item.length = binary.BigEndian.Uint32(src[0:])
+		n += 4
+	}
+	{
 
-		L := int(0 + defautCount)
+		L := int(4 + defautCount)
 		if len(src) < L {
 			return WithRawdata{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", L, len(src))
 		}
-		item.defaut = src[0:L]
+		item.defaut = src[4:L]
 		n = L
-
 	}
 	{
 
@@ -172,7 +168,6 @@ func ParseWithRawdata(src []byte, defautCount int, startToCount int) (WithRawdat
 		}
 		item.startTo = src[0:L]
 		n = L
-
 	}
 	{
 
@@ -184,6 +179,15 @@ func ParseWithRawdata(src []byte, defautCount int, startToCount int) (WithRawdat
 		item.startToEnd = src[0:]
 		n = len(src)
 	}
+	{
+
+		L := int(item.length)
+		if len(src) < L {
+			return WithRawdata{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", L, len(src))
+		}
+		item.currentToOffset = src[n:L]
+		n = L
+	}
 	return item, n, nil
 }
 
@@ -194,10 +198,8 @@ func ParseWithSlices(src []byte) (WithSlices, int, error) {
 		if L := len(src); L < 2 {
 			return WithSlices{}, 0, fmt.Errorf("EOF: expected length: 2, got %d", L)
 		}
-		_ = src[1] // early bound checking
 		item.length = binary.BigEndian.Uint16(src[0:])
 		n += 2
-
 	}
 	{
 		arrayLength := int(item.length)
@@ -227,7 +229,6 @@ func ParseWithUnion(src []byte) (WithUnion, int, error) {
 		item.version = subtableFlagVersion(binary.BigEndian.Uint16(src[0:]))
 		item.otherField = src[2]
 		n += 3
-
 	}
 	{
 		var (
@@ -246,7 +247,6 @@ func ParseWithUnion(src []byte) (WithUnion, int, error) {
 			return WithUnion{}, 0, err
 		}
 		n += read
-
 	}
 	return item, n, nil
 }
@@ -308,7 +308,6 @@ func parseToBeEmbeded(src []byte) (toBeEmbeded, int, error) {
 		item.a = src[0]
 		item.b = src[1]
 		n += 2
-
 	}
 	{
 		if L := len(src); L < 4 {
@@ -337,10 +336,8 @@ func parseVarSize(src []byte) (varSize, int, error) {
 		if L := len(src); L < 4 {
 			return varSize{}, 0, fmt.Errorf("EOF: expected length: 4, got %d", L)
 		}
-		_ = src[3] // early bound checking
 		item.f1 = binary.BigEndian.Uint32(src[0:])
 		n += 4
-
 	}
 	{
 		if L := len(src); L < 6 {
@@ -404,27 +401,22 @@ func (item *singleScope) mustParse(src []byte) {
 }
 
 func (item *subtableITF1) mustParse(src []byte) {
-	_ = src[7] // early bound checking
 	item.F = binary.BigEndian.Uint64(src[0:])
 }
 
 func (item *subtableITF2) mustParse(src []byte) {
-	_ = src[0] // early bound checking
 	item.F = src[0]
 }
 
 func (item *subtableShifted1) mustParse(src []byte) {
-	_ = src[5] // early bound checking
 	item.f = float32(binary.BigEndian.Uint32(src[2:]))
 }
 
 func (item *subtableShifted2) mustParse(src []byte) {
-	_ = src[9] // early bound checking
 	item.f = float64(binary.BigEndian.Uint64(src[2:]))
 }
 
 func (item *withAlias) mustParse(src []byte) {
-	_ = src[3] // early bound checking
 	item.f = fl32FromUint(binary.BigEndian.Uint32(src[0:]))
 }
 

@@ -155,7 +155,7 @@ type Slice struct {
 
 	// Count indicates how to read/write the length of the array
 	Count ArrayCount
-	// CountExpr is used when [Count] is [ComputedField]
+	// CountExpr is used when [Count] is [ComputedField] or [ToComputedField]
 	CountExpr string
 }
 

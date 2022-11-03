@@ -48,10 +48,12 @@ type WithOffset struct {
 
 // Used to test []byte support
 type WithRawdata struct {
-	defaut       []byte // default, external length
-	startTo      []byte `subsliceStart:"AtStart"` // external length
-	currentToEnd []byte `arrayCount:"ToEnd"`
-	startToEnd   []byte `arrayCount:"ToEnd" subsliceStart:"AtStart"`
+	length          uint32
+	defaut          []byte // default, external length
+	startTo         []byte `subsliceStart:"AtStart"` // external length
+	currentToEnd    []byte `arrayCount:"ToEnd"`
+	startToEnd      []byte `arrayCount:"ToEnd" subsliceStart:"AtStart"`
+	currentToOffset []byte `arrayCount:"To-length"` // cut the origin early
 }
 
 // Used to check that static fields yields

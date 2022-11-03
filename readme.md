@@ -7,7 +7,7 @@ the binary layout used is Opentype font files, and generates Go parsing and writ
 
 The binary layout is specified in Go source files using struct tags :
 
-- 'arrayCount' : FirstUint16 | FirstUint32 | ToEnd | ComputedField-<XXX>
+- 'arrayCount' : FirstUint16 | FirstUint32 | ToEnd | To-<XXX> | ComputedField-<XXX>
 - 'offsetSize' : Offset16 | Offset32
 - 'subsliceStart' : AtStart | AtCurrent
 - 'unionField' : the name of a previous field 
