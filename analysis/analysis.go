@@ -170,21 +170,32 @@ func (an *Analyser) fetchStructsComments() {
 	}
 }
 
-// register the structs in the given input file
-func (an *Analyser) fetchSource() {
+func (an *Analyser) allNamed() (out []*types.Named) {
 	scope := an.pkg.Types.Scope()
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 
-		if tn, isTypeName := obj.(*types.TypeName); isTypeName && tn.IsAlias() {
+		tn, isTypeName := obj.(*types.TypeName)
+		if !isTypeName {
+			continue
+		}
+		if tn.IsAlias() {
 			// ignore top level aliases
 			continue
 		}
-		ty := obj.Type()
-		if _, isStruct := ty.Underlying().(*types.Struct); isStruct {
+		out = append(out, tn.Type().(*types.Named))
+	}
+	return out
+}
+
+// register the structs in the given input file
+func (an *Analyser) fetchSource() {
+	for _, named := range an.allNamed() {
+		obj := named.Obj()
+		if _, isStruct := named.Underlying().(*types.Struct); isStruct {
 			// filter by input file
 			if an.pkg.Fset.File(obj.Pos()).Name() == an.sourceAbsPath {
-				an.sources = append(an.sources, ty.(*types.Named))
+				an.sources = append(an.sources, named)
 			}
 		}
 	}
@@ -224,13 +235,9 @@ func (an *Analyser) fetchUnionFlags() {
 func (an *Analyser) fetchInterfaces() {
 	an.interfaces = make(map[*types.Interface][]*types.Named)
 
-	scope := an.pkg.Types.Scope()
-	names := scope.Names()
-
-	for _, name := range names {
-		obj := scope.Lookup(name)
-
-		itf, isItf := obj.Type().Underlying().(*types.Interface)
+	named := an.allNamed()
+	for _, name := range named {
+		itf, isItf := name.Underlying().(*types.Interface)
 		if !isItf {
 			continue
 		}
