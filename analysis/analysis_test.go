@@ -29,7 +29,7 @@ func (an *Analyser) printExpr(expr ast.Expr) string {
 }
 
 func TestParseSource(t *testing.T) {
-	if ana.absSourcePath == "" {
+	if ana.sourceAbsPath == "" {
 		t.Fatal()
 	}
 
@@ -37,7 +37,7 @@ func TestParseSource(t *testing.T) {
 		t.Fatal()
 	}
 
-	if len(ana.Sources) == 0 {
+	if len(ana.sources) == 0 {
 		t.Fatal()
 	}
 
@@ -55,7 +55,12 @@ func TestParseSource(t *testing.T) {
 }
 
 func TestStartingOffset(t *testing.T) {
-	if ty := ana.byName("startNoAtSubslice"); ana.commentsMap[ty].startingOffset != "2" {
+	ty := ana.byName("startNoAtSubslice")
+	if ana.commentsMap[ty].startingOffset != "2" {
+		t.Fatal()
+	}
+
+	if u := ana.Tables[ty]; u.StartingOffset != 2 {
 		t.Fatal()
 	}
 }
@@ -83,7 +88,7 @@ func TestInterfaces(t *testing.T) {
 		t.Fatal()
 	}
 
-	u := ana.Tables[ana.byName("withUnion")].Fields[2].Type.(Union)
+	u := ana.Tables[ana.byName("WithUnion")].Fields[2].Type.(Union)
 	if len(u.Flags) != 2 || len(u.Members) != 2 {
 		t.Fatal(u)
 	}
@@ -128,5 +133,13 @@ func TestRawdata(t *testing.T) {
 	startToEnd := ty.Fields[3]
 	if startToEnd.Type.(Slice).Count != ToEnd {
 		t.Fatal()
+	}
+}
+
+func TestExternalTypes(t *testing.T) {
+	ty := ana.Tables[ana.byName("withFromExternalFile")]
+	ref := ty.Fields[0].Type.Origin().(*types.Named)
+	if _, hasRef := ana.Tables[ref]; !hasRef {
+		t.Fatalf("missing reference to %s", ref)
 	}
 }

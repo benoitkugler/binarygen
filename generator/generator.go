@@ -18,6 +18,7 @@ type Buffer struct {
 	decls []Declaration
 }
 
+// NewBuffer returns a ready to use buffer.
 func NewBuffer() Buffer {
 	return Buffer{seen: map[string]bool{}}
 }
@@ -129,22 +130,31 @@ func (cc *Context) SubSlice(subSlice Expression) string {
 	return out
 }
 
-// ParsingFunc adds the context to the given [scopes] and [args]
-func (cc Context) ParsingFunc(args, scopes []string) Declaration {
+// ParsingFunc adds the context to the given [scopes] and [args], also
+// adding the given comment as documentation
+func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Declaration {
 	isExported := unicode.IsUpper([]rune(cc.Type)[0])
 	funcTitle := "parse"
 	if isExported {
 		funcTitle = "Parse"
 	}
 	funcName := funcTitle + strings.Title(string(cc.Type))
-	content := fmt.Sprintf(`func %s(%s) (%s, int, error) {
+	if comment != "" {
+		comment = "// " + comment + "\n"
+	}
+	content := fmt.Sprintf(`%sfunc %s(%s) (%s, int, error) {
 		var %s %s
 		%s
 		return %s, %s, nil
 	}
-	`, funcName, strings.Join(args, ","), cc.Type, cc.ObjectVar,
+	`, comment, funcName, strings.Join(args, ","), cc.Type, cc.ObjectVar,
 		cc.Type, strings.Join(scopes, "\n"), cc.ObjectVar, cc.Offset.Name)
 	return Declaration{ID: funcName, Content: content, IsExported: isExported}
+}
+
+// ParsingFunc adds the context to the given [scopes] and [args]
+func (cc Context) ParsingFunc(args, scopes []string) Declaration {
+	return cc.ParsingFuncComment(args, scopes, "")
 }
 
 // offset management

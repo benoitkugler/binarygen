@@ -9,6 +9,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -20,13 +21,13 @@ type Analyser struct {
 	// Source is the path of the origin go source file.
 	Source string
 
-	absSourcePath string
+	sourceAbsPath string
 
 	pkg *packages.Package
 
 	// Sources contains only the structs
 	// from the source file
-	Sources []*types.Named
+	sources []*types.Named
 
 	// Tables contains the resolved struct definitions, coming from [Sources]
 	Tables map[*types.Named]Struct
@@ -48,11 +49,12 @@ type Analyser struct {
 	constructors map[string]*types.Basic
 }
 
-// load the source go file with go/packages
-func importSource(path string) (Analyser, error) {
+// ImportSource loads the source go file with go/packages,
+// also returning the absolute path.
+func ImportSource(path string) (*packages.Package, string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return Analyser{}, err
+		return nil, "", err
 	}
 
 	cfg := &packages.Config{
@@ -60,29 +62,22 @@ func importSource(path string) (Analyser, error) {
 	}
 	tmp, err := packages.Load(cfg, "file="+absPath)
 	if err != nil {
-		return Analyser{}, err
+		return nil, "", err
 	}
 	if len(tmp) != 1 {
-		return Analyser{}, fmt.Errorf("multiple packages not supported")
+		return nil, "", fmt.Errorf("multiple packages not supported")
 	}
 
-	pkg := tmp[0]
-	out := Analyser{
-		Source:        path,
-		absSourcePath: absPath,
-		pkg:           pkg,
-	}
-
-	return out, nil
+	return tmp[0], absPath, nil
 }
 
-// NewAnalyser load the package of `path` and
-// analyze the defined structs, filling the fields
-// [Source] and [Tables].
-func NewAnalyser(path string) (Analyser, error) {
-	an, err := importSource(path)
-	if err != nil {
-		return an, err
+// NewAnalyserFromPkg uses [pkg] to analyse the tables defined in
+// [sourcePath].
+func NewAnalyserFromPkg(pkg *packages.Package, sourcePath, sourceAbsPath string) Analyser {
+	an := Analyser{
+		Source:        sourcePath,
+		sourceAbsPath: sourceAbsPath,
+		pkg:           pkg,
 	}
 
 	an.fetchSource()
@@ -94,11 +89,23 @@ func NewAnalyser(path string) (Analyser, error) {
 
 	// perform the actual analysis
 	an.Tables = make(map[*types.Named]Struct)
-	for _, ty := range an.Sources {
+	for _, ty := range an.sources {
 		an.handleTable(ty)
 	}
 
-	return an, nil
+	return an
+}
+
+// NewAnalyser load the package of `path` and
+// analyze the defined structs, filling the fields
+// [Source] and [Tables].
+func NewAnalyser(path string) (Analyser, error) {
+	pkg, absPath, err := ImportSource(path)
+	if err != nil {
+		return Analyser{}, err
+	}
+
+	return NewAnalyserFromPkg(pkg, path, absPath), nil
 }
 
 type syntaxFieldTypes = map[*types.Named]map[string]ast.Expr
@@ -176,8 +183,8 @@ func (an *Analyser) fetchSource() {
 		ty := obj.Type()
 		if _, isStruct := ty.Underlying().(*types.Struct); isStruct {
 			// filter by input file
-			if an.pkg.Fset.File(obj.Pos()).Name() == an.absSourcePath {
-				an.Sources = append(an.Sources, ty.(*types.Named))
+			if an.pkg.Fset.File(obj.Pos()).Name() == an.sourceAbsPath {
+				an.sources = append(an.sources, ty.(*types.Named))
 			}
 		}
 	}
@@ -229,7 +236,7 @@ func (an *Analyser) fetchInterfaces() {
 		}
 
 		// find the members of this interface
-		for _, st := range an.Sources {
+		for _, st := range an.sources {
 			if types.Implements(st, itf) {
 				an.interfaces[itf] = append(an.interfaces[itf], st)
 			}
@@ -264,13 +271,16 @@ func (an *Analyser) fetchConstructors() {
 	}
 }
 
-func (an *Analyser) handleTable(ty *types.Named) {
-	if _, has := an.Tables[ty]; has {
-		return
+// handle table wraps [createFromStruct] by registering
+// the type in [Tables]
+func (an *Analyser) handleTable(ty *types.Named) Struct {
+	if st, has := an.Tables[ty]; has {
+		return st
 	}
 
-	st := an.createTypeFor(ty, parsedTags{}, nil).(Struct)
+	st := an.createFromStruct(ty)
 	an.Tables[ty] = st
+	return st
 }
 
 // resolveName returns a string for the name of the given type,
@@ -331,13 +341,16 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		return Array{origin: ty, Len: int(under.Len()), Elem: elem}
 	case *types.Struct:
 		// anonymous structs are not supported
-		return an.createFromStruct(ty.(*types.Named))
+		return an.handleTable(ty.(*types.Named))
 	case *types.Slice:
 		elemDecl := sliceElement(decl)
 		// recurse on the element
 		elem := an.createTypeFor(under.Elem(), parsedTags{}, elemDecl)
 		return Slice{origin: ty, Elem: elem, Count: tags.arrayCount, CountExpr: tags.arrayCountField}
 	case *types.Interface:
+		if tags.unionField == nil {
+			panic(fmt.Sprintf("union field with type %s is missing unionField tag", ty))
+		}
 		// anonymous interface are not supported
 		return an.createFromInterface(ty.(*types.Named), tags.unionField)
 	default:
@@ -363,6 +376,17 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		origin: ty,
 		Fields: make([]Field, st.NumFields()),
 	}
+
+	cm := an.commentsMap[ty]
+	if cm.startingOffset != "" {
+		// we only support integer shift for now
+		so, err := strconv.Atoi(cm.startingOffset)
+		if err != nil {
+			panic(fmt.Sprintf("unsupported startingOffset %s: %s", cm.startingOffset, err))
+		}
+		out.StartingOffset = so
+	}
+
 	for i := range out.Fields {
 		field := st.Field(i)
 
@@ -389,6 +413,10 @@ func (an *Analyser) createFromInterface(ty *types.Named, unionField *types.Var) 
 	flags := an.unionFlags[unionField.Type().(*types.Named)]
 	members := an.interfaces[itf]
 
+	// this can't be correct in practice
+	if len(members) == 0 {
+		panic(fmt.Sprintf("interface %s does not have any member", itfName))
+	}
 	// match flags and members
 	byVersion := map[string]*types.Const{}
 	for _, flag := range flags {
@@ -406,7 +434,7 @@ func (an *Analyser) createFromInterface(ty *types.Named, unionField *types.Var) 
 			panic(fmt.Sprintf("union flag %sVersion%s not defined", itfName, version))
 		}
 		// analyse the concrete type
-		st := an.createFromStruct(member)
+		st := an.handleTable(member)
 
 		out.Members = append(out.Members, st)
 		out.Flags = append(out.Flags, flag)

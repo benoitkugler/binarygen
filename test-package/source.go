@@ -10,7 +10,7 @@ type withAlias struct {
 }
 
 // Used to test interface support
-type withUnion struct {
+type WithUnion struct {
 	version    subtableFlagVersion
 	otherField byte
 	data       subtableITF `unionField:"version"`
@@ -96,4 +96,47 @@ type varSize struct {
 	f1     uint32
 	array  []uint32    `arrayCount:"FirstUint16"`
 	stucts []withAlias `arrayCount:"FirstUint32"`
+}
+
+// ShiftedLayout is an exemple of interface
+// members which require the whole slice to be parsed,
+// usually because of offset conventions.
+type ShiftedLayout struct {
+	version shiftedVersion
+	body    subtableShifted `subsliceStart:"AtStart" unionField:"version"`
+}
+
+type subtableShifted interface {
+	isSubtableShifted()
+}
+
+func (subtableShifted1) isSubtableShifted() {}
+func (subtableShifted2) isSubtableShifted() {}
+
+// binarygen: startOffset=2
+type subtableShifted1 struct {
+	f float32
+}
+
+// binarygen: startOffset=2
+type subtableShifted2 struct {
+	f float64
+}
+
+type shiftedVersion uint16
+
+const (
+	shiftedVersion1 shiftedVersion = iota
+	shiftedVersion2
+)
+
+type withEmbeded struct {
+	a, b, c byte
+	toBeEmbeded
+}
+
+// uses type not defined in the origin source file
+type withFromExternalFile struct {
+	a withFixedSize
+	b withFixedSize
 }

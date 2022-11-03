@@ -16,6 +16,8 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 		return parserForOpaque(field, cc)
 	case an.Offset:
 		return parserForOffset(field, cc)
+	case an.Union:
+		return parserForUnion(field, cc)
 	case an.Struct:
 		return fmt.Sprintf(`var (
 			err error
@@ -36,8 +38,10 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 // delegate the parsing to a user written method
 func parserForOpaque(field an.Field, cc *gen.Context) string {
 	start := cc.Offset.Value()
+	updateOffset := cc.Offset.UpdateStatementDynamic("read")
 	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""
+		updateOffset = cc.Offset.SetStatement("read")
 	}
 	return fmt.Sprintf(`
 	read, err := %s.customParse(%s[%s:])
@@ -47,7 +51,7 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 	%s
 	`, cc.Selector(field.Name), cc.Slice, start,
 		cc.ErrReturn("err"),
-		cc.Offset.UpdateStatementDynamic("read"),
+		updateOffset,
 	)
 }
 
@@ -243,4 +247,48 @@ func parserForOffset(fi an.Field, cc *gen.Context) string {
 	}, cc))
 	cc.Offset = savedOffset
 	return strings.Join(statements, "\n")
+}
+
+// -- unions --
+
+func parserForUnion(fl an.Field, cc *gen.Context) string {
+	u := fl.Type.(an.Union)
+
+	start := cc.Offset.Value()
+	updateOffset := cc.Offset.UpdateStatementDynamic("read")
+	if fl.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
+		start = ""
+		updateOffset = cc.Offset.SetStatement("read")
+	}
+
+	var cases []string
+	for i, flag := range u.Flags {
+		member := u.Members[i]
+		cases = append(cases, fmt.Sprintf(`case %s :
+		%s, read, err = parse%s(%s[%s:], %s)`,
+			flag.Name(), cc.Selector(fl.Name), strings.Title(gen.Name(member)), cc.Slice,
+			start, argumentsList(requiredArgs(member)),
+		))
+	}
+	kindVariable := cc.Selector(u.FlagField)
+	return fmt.Sprintf(`var (
+			read int
+			err error
+		)
+		switch %s {
+		%s
+		default:
+			err = fmt.Errorf("unsupported %sVersion %%d", %s)
+		}
+		if err != nil {
+			%s
+		}
+		%s
+		`, kindVariable,
+		strings.Join(cases, "\n"),
+		gen.Name(u),
+		kindVariable,
+		cc.ErrReturn("err"),
+		updateOffset,
+	)
 }

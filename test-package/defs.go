@@ -14,58 +14,9 @@ type withFixedSize struct {
 	array2  [5]uint16
 }
 
-type varInstance struct {
-	Coords    []fl1616 `arrayCount:""`
-	Coords2   []fl1616 `arrayCount:""`
-	Subfamily uint16
-
-	PSStringID uint16 `bin:"optional"`
-}
-
-type varInstanceContainer struct {
-	inst varInstance
-}
-
-type embeded struct {
+type toBeEmbeded struct {
 	a, b byte
 	c    []uint16 `arrayCount:"FirstUint16"`
-}
-
-type Composed2 struct {
-	a, b, c byte
-	embeded
-}
-
-type composed struct {
-	a withFixedSize
-	b withFixedSize
-}
-
-type simpleSubtable struct {
-	version uint16
-	x, y    int16
-	lookups []withFixedSize `arrayCount:"FirstUint16"`
-	array2  []uint32        `arrayCount:"FirstUint16"`
-}
-
-type ComplexeSubtable struct {
-	version uint16
-	x, y    int16
-	lookups []withFixedSize `arrayCount:"FirstUint16"`
-	u, v    float214
-	a, b, c int64
-	array2  []uint32 `arrayCount:"FirstUint32"`
-	array3  []fl32   `arrayCount:"FirstUint32"`
-	opaque  []byte   `isOpaque:""`
-	rawData []byte   `arrayCount:"ToEnd" subsliceStart:"AtStart"`
-}
-
-type arrayLike struct {
-	size   uint16
-	datas  []uint16        `arrayCount:"ComputedField-size"`
-	array  []withFixedSize `arrayCount:"FirstUint16"`
-	array2 []composed      `arrayCount:"FirstUint16"`
-	data   []byte          `arrayCount:"ToEnd"`
 }
 
 type tag uint32

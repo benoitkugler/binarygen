@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"go/format"
 	"os"
 	"os/exec"
 	"testing"
@@ -25,7 +24,7 @@ func init() {
 
 func TestGenerateParser(t *testing.T) {
 	buf := gen.NewBuffer()
-	AllParsers(ana, &buf)
+	ParsersForFile(ana, &buf)
 
 	content := []byte(fmt.Sprintf(`
 	package %s
@@ -35,13 +34,8 @@ func TestGenerateParser(t *testing.T) {
 	%s
 	`, ana.PackageName(), ana.Source, buf.Code()))
 
-	formatted, err := format.Source(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	outfile := "../../test-package/source_gen.go"
-	err = os.WriteFile(outfile, formatted, os.ModePerm)
+	err := os.WriteFile(outfile, content, os.ModePerm)
 	if err != nil {
 		t.Fatal(err)
 	}

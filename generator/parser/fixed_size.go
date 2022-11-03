@@ -51,11 +51,6 @@ func mustParserStruct(st an.Struct, cc gen.Context, selector string) string {
 	return fmt.Sprintf("%s.mustParse(%s[%s:])", cc.Selector(selector), cc.Slice, cc.Offset.Value())
 }
 
-// func mustParserOffset(of an.Offset, cc gen.Context, selector string) string {
-// 	readCode := readBasicTypeAt(cc, of.size_, cc.offsetExpr)
-// 	return fmt.Sprintf("%s := int(%s)", of.offsetVariableName(selector), readCode)
-// }
-
 func mustParserArray(ar an.Array, cc gen.Context, selector string) string {
 	elemSize, ok := ar.Elem.IsFixedSize()
 	if !ok {
@@ -94,7 +89,8 @@ func mustParserFields(fs an.StaticSizedFields, cc *gen.Context) string {
 
 // return the mustParse method and the body of the parse function
 func mustParserFieldsFunction(fs an.StaticSizedFields, cc gen.Context) (mustParse gen.Declaration, parseBody string) {
-	mustParseBody := mustParserFields(fs, &cc)
+	contextCopy := cc
+	mustParseBody := mustParserFields(fs, &contextCopy) // pass a copy of context not influence the next calls
 
 	mustParse.ID = string(cc.Type) + ".mustParse"
 	mustParse.Content = fmt.Sprintf(`func (%s *%s) mustParse(%s []byte) {

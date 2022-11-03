@@ -8,24 +8,23 @@ import (
 	gen "github.com/benoitkugler/binarygen/generator"
 )
 
-// AllParsers write all the parsing functions in [dst]
-func AllParsers(ana an.Analyser, dst *gen.Buffer) {
+// ParsersForFile write the parsing functions required by [ana.Tables] in [dst]
+func ParsersForFile(ana an.Analyser, dst *gen.Buffer) {
 	for _, table := range ana.Tables {
-		for _, decl := range ParserForTable(table) {
+		for _, decl := range parserForTable(table) {
 			dst.Add(decl)
 		}
 	}
 }
 
-// ParserForTable returns the parsing function for the given table.
+// parserForTable returns the parsing function for the given table.
 // The required methods for fields shall be generated in a separated step.
-// TODO: support offset shift
-func ParserForTable(ta an.Struct) []gen.Declaration {
+func parserForTable(ta an.Struct) []gen.Declaration {
 	context := &gen.Context{
 		Type:      ta.Origin().(*types.Named).Obj().Name(),
 		ObjectVar: "item",
-		Slice:     "src",                 // defined in args
-		Offset:    gen.NewOffset("n", 0), // defined later
+		Slice:     "src",                                 // defined in args
+		Offset:    gen.NewOffset("n", ta.StartingOffset), // defined later
 	}
 
 	scopes := ta.Scopes()
@@ -34,9 +33,13 @@ func ParserForTable(ta an.Struct) []gen.Declaration {
 		return []gen.Declaration{context.ParsingFunc([]string{"[]byte"}, []string{"n := 0"})}
 	}
 
-	body, args := []string{"n := 0"}, []string{"src []byte"}
+	body, args := []string{fmt.Sprintf("n := %s", context.Offset.Value())}, []string{"src []byte"}
 	for _, arg := range requiredArgs(ta) {
 		args = append(args, arg.asSignature())
+	}
+	comment := ""
+	if ta.StartingOffset != 0 {
+		comment = fmt.Sprintf("the actual data starts at %s[%d:]", context.Slice, ta.StartingOffset)
 	}
 
 	// important special case when all fields have fixed size (with no offset) :
@@ -46,14 +49,14 @@ func ParserForTable(ta an.Struct) []gen.Declaration {
 		mustParse, parseBody := mustParserFieldsFunction(fs, *context)
 		body = append(body, parseBody)
 
-		return []gen.Declaration{mustParse, context.ParsingFunc(args, body)}
+		return []gen.Declaration{mustParse, context.ParsingFuncComment(args, body, comment)}
 	}
 
 	for _, scope := range scopes {
 		body = append(body, parser(scope, context))
 	}
 
-	finalCode := context.ParsingFunc(args, body)
+	finalCode := context.ParsingFuncComment(args, body, comment)
 
 	return []gen.Declaration{finalCode}
 }

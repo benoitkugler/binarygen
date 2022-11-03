@@ -56,6 +56,11 @@ func (t Opaque) Origin() types.Type           { return t.origin }
 type Struct struct {
 	origin *types.Named
 	Fields []Field
+
+	// StartingOffset, defaulting to 0, maybe
+	// be defined to indicate that the actual content of
+	// the struct starts at [StartingOffset] in the given byte slice.
+	StartingOffset int
 }
 
 // Field is a struct field.

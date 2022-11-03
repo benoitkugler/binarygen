@@ -101,6 +101,14 @@ func (arg argument) asSignature() string {
 	return fmt.Sprintf("%s %s", arg.variableName, arg.typeName)
 }
 
+func argumentsList(arguments []argument) string {
+	var args []string
+	for _, arg := range arguments {
+		args = append(args, arg.variableName)
+	}
+	return strings.Join(args, ", ")
+}
+
 func requiredArgs(st an.Struct) (args []argument) {
 	for _, field := range st.Fields {
 		switch ty := field.Type.(type) {

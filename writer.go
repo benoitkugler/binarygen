@@ -1,42 +1,33 @@
 package binarygen
 
-import (
-	"fmt"
-)
-
 // generated code - writer
 
-func sliceExpr(sliceName string, offset int) string {
-	sliceExpr := sliceName
-	if offset != 0 {
-		sliceExpr = fmt.Sprintf("%s[%d:]", sliceName, offset)
-	}
-	return sliceExpr
-}
+// func sliceExpr(sliceName string, offset int) string {
+// 	sliceExpr := sliceName
+// 	if offset != 0 {
+// 		sliceExpr = fmt.Sprintf("%s[%d:]", sliceName, offset)
+// 	}
+// 	return sliceExpr
+// }
 
-// do not perform bounds check
-func writeBasicType(sliceName, varName string, size int, offset int) string {
-	slice := sliceExpr(sliceName, offset)
-	switch size {
-	case bytes1:
-		return fmt.Sprintf("%s[%d] = byte(%s)", sliceName, offset, varName)
-	case bytes2:
-		return fmt.Sprintf("binary.BigEndian.PutUint16(%s, uint16(%s))", slice, varName)
-	case bytes4:
-		return fmt.Sprintf("binary.BigEndian.PutUint32(%s, uint32(%s))", slice, varName)
-	case bytes8:
-		return fmt.Sprintf("binary.BigEndian.PutUint64(%s, uint64(%s))", slice, varName)
-	default:
-		panic("not supported")
-	}
-}
-
-// TODO:
-func (fixedSizeList) appender(cc codeContext) string { return "" }
+// // do not perform bounds check
+// func writeBasicType(sliceName, varName string, size int, offset int) string {
+// 	slice := sliceExpr(sliceName, offset)
+// 	switch size {
+// 	case bytes1:
+// 		return fmt.Sprintf("%s[%d] = byte(%s)", sliceName, offset, varName)
+// 	case bytes2:
+// 		return fmt.Sprintf("binary.BigEndian.PutUint16(%s, uint16(%s))", slice, varName)
+// 	case bytes4:
+// 		return fmt.Sprintf("binary.BigEndian.PutUint32(%s, uint32(%s))", slice, varName)
+// 	case bytes8:
+// 		return fmt.Sprintf("binary.BigEndian.PutUint64(%s, uint64(%s))", slice, varName)
+// 	default:
+// 		panic("not supported")
+// 	}
+// }
 
 // TODO:
-func (structField) appender(cc codeContext) string { return "" }
-
 // func (wc withConstructor) generateWriter(srcVar, dstSlice string, offset int) string {
 // 	var accesVar string
 // 	if wc.isMethod {
