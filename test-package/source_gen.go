@@ -38,6 +38,17 @@ func ParseShiftedLayout(src []byte) (ShiftedLayout, int, error) {
 	return item, n, nil
 }
 
+func ParseWithArray(src []byte) (WithArray, int, error) {
+	var item WithArray
+	n := 0
+	if L := len(src); L < 21 {
+		return WithArray{}, 0, fmt.Errorf("EOF: expected length: 21, got %d", L)
+	}
+	item.mustParse(src)
+	n += 21
+	return item, n, nil
+}
+
 func ParseWithOffset(src []byte) (WithOffset, int, error) {
 	var item WithOffset
 	n := 0
@@ -251,6 +262,18 @@ func ParseWithUnion(src []byte) (WithUnion, int, error) {
 	return item, n, nil
 }
 
+func (item *WithArray) mustParse(src []byte) {
+	_ = src[20] // early bound checking
+	item.a = binary.BigEndian.Uint16(src[0:])
+	item.b[0] = binary.BigEndian.Uint32(src[2:])
+	item.b[1] = binary.BigEndian.Uint32(src[6:])
+	item.b[2] = binary.BigEndian.Uint32(src[10:])
+	item.b[3] = binary.BigEndian.Uint32(src[14:])
+	item.c[0] = src[18]
+	item.c[1] = src[19]
+	item.c[2] = src[20]
+}
+
 func parseSubtableITF1(src []byte) (subtableITF1, int, error) {
 	var item subtableITF1
 	n := 0
@@ -388,16 +411,16 @@ func (item *singleScope) mustParse(src []byte) {
 	item.t = tag(binary.BigEndian.Uint32(src[26:]))
 	item.v = float214(binary.BigEndian.Uint32(src[30:]))
 	item.w = fl32FromUint(binary.BigEndian.Uint32(src[34:]))
-	item.array1[0] = src[39]
-	item.array1[1] = src[40]
-	item.array1[2] = src[41]
-	item.array1[3] = src[42]
-	item.array1[4] = src[43]
-	item.array2[0] = binary.BigEndian.Uint16(src[45:])
-	item.array2[1] = binary.BigEndian.Uint16(src[47:])
-	item.array2[2] = binary.BigEndian.Uint16(src[49:])
-	item.array2[3] = binary.BigEndian.Uint16(src[51:])
-	item.array2[4] = binary.BigEndian.Uint16(src[53:])
+	item.array1[0] = src[38]
+	item.array1[1] = src[39]
+	item.array1[2] = src[40]
+	item.array1[3] = src[41]
+	item.array1[4] = src[42]
+	item.array2[0] = binary.BigEndian.Uint16(src[43:])
+	item.array2[1] = binary.BigEndian.Uint16(src[45:])
+	item.array2[2] = binary.BigEndian.Uint16(src[47:])
+	item.array2[3] = binary.BigEndian.Uint16(src[49:])
+	item.array2[4] = binary.BigEndian.Uint16(src[51:])
 }
 
 func (item *subtableITF1) mustParse(src []byte) {
@@ -432,16 +455,16 @@ func (item *withFixedSize) mustParse(src []byte) {
 	item.t = tag(binary.BigEndian.Uint32(src[26:]))
 	item.v = float214(binary.BigEndian.Uint32(src[30:]))
 	item.w = fl32FromUint(binary.BigEndian.Uint32(src[34:]))
-	item.array1[0] = src[39]
-	item.array1[1] = src[40]
-	item.array1[2] = src[41]
-	item.array1[3] = src[42]
-	item.array1[4] = src[43]
-	item.array2[0] = binary.BigEndian.Uint16(src[45:])
-	item.array2[1] = binary.BigEndian.Uint16(src[47:])
-	item.array2[2] = binary.BigEndian.Uint16(src[49:])
-	item.array2[3] = binary.BigEndian.Uint16(src[51:])
-	item.array2[4] = binary.BigEndian.Uint16(src[53:])
+	item.array1[0] = src[38]
+	item.array1[1] = src[39]
+	item.array1[2] = src[40]
+	item.array1[3] = src[41]
+	item.array1[4] = src[42]
+	item.array2[0] = binary.BigEndian.Uint16(src[43:])
+	item.array2[1] = binary.BigEndian.Uint16(src[45:])
+	item.array2[2] = binary.BigEndian.Uint16(src[47:])
+	item.array2[3] = binary.BigEndian.Uint16(src[49:])
+	item.array2[4] = binary.BigEndian.Uint16(src[51:])
 }
 
 func (item *withFromExternalFile) mustParse(src []byte) {

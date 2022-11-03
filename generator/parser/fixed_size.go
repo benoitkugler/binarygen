@@ -59,11 +59,12 @@ func mustParserArray(ar an.Array, cc gen.Context, selector string) string {
 
 	statements := make([]string, ar.Len)
 	for i := range statements {
-		// adjust the selector ...
+		// adjust the selector
 		elemSelector := fmt.Sprintf("%s[%d]", selector, i)
-		// and the context offset
-		cc.Offset.Increment(elemSize)
+		// generate the code
 		statements[i] = mustParser(ar.Elem, cc, elemSelector)
+		// update the context offset
+		cc.Offset.Increment(elemSize)
 	}
 	return strings.Join(statements, "\n")
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	pa "go/parser"
 	"go/token"
+	"strings"
 	"testing"
 
 	"github.com/benoitkugler/binarygen/analysis"
@@ -93,5 +94,33 @@ func TestCodeForLength(t *testing.T) {
 			CountExpr: "myVar",
 		}, "dummy", &cc)
 		assertParseBlock(t, code)
+	}
+}
+
+func TestWithArray(t *testing.T) {
+	// for the given struct WithArray
+	//
+	// a uint16
+	// b [4]uint32
+	// c [3]byte
+	//
+	// the expected output should be
+	//
+	expected := []string{
+		"item.a = binary.BigEndian.Uint16(src[0:])",
+		"item.b[0] = binary.BigEndian.Uint32(src[2:])",
+		"item.b[1] = binary.BigEndian.Uint32(src[6:])",
+		"item.b[2] = binary.BigEndian.Uint32(src[10:])",
+		"item.b[3] = binary.BigEndian.Uint32(src[14:])",
+		"item.c[0] = src[18]",
+		"item.c[1] = src[19]",
+		"item.c[2] = src[20]",
+	}
+
+	mustParse := parserForTable(ana.Tables[ana.ByName("WithArray")])[0].Content
+	for _, line := range expected {
+		if !strings.Contains(mustParse, line) {
+			t.Fatalf("missing\n%s \nin \n %s", line, mustParse)
+		}
 	}
 }

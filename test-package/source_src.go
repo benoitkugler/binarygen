@@ -142,3 +142,9 @@ type withFromExternalFile struct {
 	a withFixedSize
 	b withFixedSize
 }
+
+type WithArray struct {
+	a uint16
+	b [4]uint32
+	c [3]byte
+}
