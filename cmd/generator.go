@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// perform the (costly) package analysis
-	fmt.Println("Loading package code...")
+	fmt.Printf("Loading package code for '%s'...\n", dir)
 	pkg, _, err := analysis.ImportSource(filePaths[0])
 	if err != nil {
 		log.Fatal(err)
