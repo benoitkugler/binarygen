@@ -18,10 +18,6 @@ func init() {
 	}
 }
 
-func (an *Analyser) byName(name string) *types.Named {
-	return an.pkg.Types.Scope().Lookup(name).Type().(*types.Named)
-}
-
 func (an *Analyser) printExpr(expr ast.Expr) string {
 	var buf bytes.Buffer
 	format.Node(&buf, an.pkg.Fset, expr)
@@ -55,7 +51,7 @@ func TestParseSource(t *testing.T) {
 }
 
 func TestStartingOffset(t *testing.T) {
-	ty := ana.byName("startNoAtSubslice")
+	ty := ana.ByName("startNoAtSubslice")
 	if ana.commentsMap[ty].startingOffset != "2" {
 		t.Fatal()
 	}
@@ -66,29 +62,29 @@ func TestStartingOffset(t *testing.T) {
 }
 
 func TestAliases(t *testing.T) {
-	if ty := ana.byName("withAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
+	if ty := ana.ByName("withAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
 		t.Fatal()
 	}
 
-	u := ana.Tables[ana.byName("withAlias")].Fields[0]
+	u := ana.Tables[ana.ByName("withAlias")].Fields[0]
 	if derived := u.Type.(DerivedFromBasic); derived.Name != "fl32" {
 		t.Fatal()
 	}
 }
 
 func TestOpaque(t *testing.T) {
-	fi := ana.Tables[ana.byName("WithOpaque")].Fields[1]
+	fi := ana.Tables[ana.ByName("WithOpaque")].Fields[1]
 	if _, isOpaque := fi.Type.(Opaque); !isOpaque {
 		t.Fatal()
 	}
 }
 
 func TestInterfaces(t *testing.T) {
-	if ty := ana.byName("subtableITF"); len(ana.interfaces[ty.Underlying().(*types.Interface)]) != 2 {
+	if ty := ana.ByName("subtableITF"); len(ana.interfaces[ty.Underlying().(*types.Interface)]) != 2 {
 		t.Fatal()
 	}
 
-	u := ana.Tables[ana.byName("WithUnion")].Fields[2].Type.(Union)
+	u := ana.Tables[ana.ByName("WithUnion")].Fields[2].Type.(Union)
 	if len(u.Flags) != 2 || len(u.Members) != 2 {
 		t.Fatal(u)
 	}
@@ -101,7 +97,7 @@ func TestConstructors(t *testing.T) {
 }
 
 func TestOffset(t *testing.T) {
-	ty := ana.Tables[ana.byName("WithOffset")]
+	ty := ana.Tables[ana.ByName("WithOffset")]
 	o1 := ty.Fields[1].Type
 	o2 := ty.Fields[2].Type
 	o3 := ty.Fields[6].Type
@@ -117,7 +113,7 @@ func TestOffset(t *testing.T) {
 }
 
 func TestRawdata(t *testing.T) {
-	ty := ana.Tables[ana.byName("WithRawdata")]
+	ty := ana.Tables[ana.ByName("WithRawdata")]
 
 	for _, fi := range ty.Fields[1:] {
 		if !fi.Type.(Slice).IsRawData() {
@@ -142,9 +138,19 @@ func TestRawdata(t *testing.T) {
 }
 
 func TestExternalTypes(t *testing.T) {
-	ty := ana.Tables[ana.byName("withFromExternalFile")]
+	ty := ana.Tables[ana.ByName("withFromExternalFile")]
 	ref := ty.Fields[0].Type.Origin().(*types.Named)
 	if _, hasRef := ana.Tables[ref]; !hasRef {
 		t.Fatalf("missing reference to %s", ref)
+	}
+}
+
+func TestArray(t *testing.T) {
+	ty := ana.Tables[ana.ByName("WithArray")]
+	// a uint16
+	// b [4]uint32
+	// c [3]byte
+	if size, _ := ty.IsFixedSize(); size != 2+4*4+3*1 {
+		t.Fatal()
 	}
 }

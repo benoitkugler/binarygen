@@ -118,6 +118,12 @@ func getSyntaxFields(scope *types.Scope, ty *ast.TypeSpec, st *ast.StructType) (
 
 func (an *Analyser) PackageName() string { return an.pkg.Name }
 
+// ByName returns the type with name [name], or panic
+// if it does not exist
+func (an *Analyser) ByName(name string) *types.Named {
+	return an.pkg.Types.Scope().Lookup(name).Type().(*types.Named)
+}
+
 // go/types erase alias information, so we add it in a preliminary step
 func (an *Analyser) fetchFieldAliases() {
 	an.forAliases = make(syntaxFieldTypes)

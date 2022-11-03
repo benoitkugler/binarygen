@@ -3,7 +3,7 @@ package analysis
 import "testing"
 
 func TestScopes(t *testing.T) {
-	ta := ana.Tables[ana.byName("singleScope")]
+	ta := ana.Tables[ana.ByName("singleScope")]
 	if _, is := ta.IsFixedSize(); !is {
 		t.Fatal()
 	}
@@ -11,7 +11,7 @@ func TestScopes(t *testing.T) {
 		t.Fatal(ta.Scopes())
 	}
 
-	l := ana.Tables[ana.byName("multipleScopes")].Scopes()
+	l := ana.Tables[ana.ByName("multipleScopes")].Scopes()
 	if len(l) != 3 {
 		t.Fatal(l)
 	}
