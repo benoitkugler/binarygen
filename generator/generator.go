@@ -11,17 +11,18 @@ import (
 	"github.com/benoitkugler/binarygen/analysis"
 )
 
+type Accu map[string]bool
+
 // Buffer is used to accumulate
 // and de-deduplicate function declarations
 type Buffer struct {
-	seen  map[string]bool
+	seen  Accu
 	decls []Declaration
 }
 
-// NewBuffer returns a ready to use buffer.
-func NewBuffer() Buffer {
-	return Buffer{seen: map[string]bool{}}
-}
+// NewBuffer returns a ready to use buffer,
+// which will add the new decleration to [accu].
+func NewBuffer(accu Accu) Buffer { return Buffer{seen: accu} }
 
 func (db *Buffer) Add(decl Declaration) {
 	if db.seen[decl.ID] {

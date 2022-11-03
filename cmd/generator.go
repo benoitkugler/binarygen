@@ -48,6 +48,7 @@ func main() {
 	}
 
 	fmt.Printf("Generating code for %d source files...\n", len(filePaths))
+	accu := make(generator.Accu)
 	// generate the code file by file
 	for _, path := range filePaths {
 		absPath, err := filepath.Abs(path)
@@ -57,7 +58,7 @@ func main() {
 
 		ana := analysis.NewAnalyserFromPkg(pkg, path, absPath)
 
-		buf := generator.NewBuffer()
+		buf := generator.NewBuffer(accu)
 		parser.ParsersForFile(ana, &buf)
 		// TODO: writer
 
