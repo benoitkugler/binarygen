@@ -69,7 +69,7 @@ func main() {
 		%s
 		`, ana.PackageName(), ana.Source, buf.Code()))
 
-		outFile := strings.TrimSuffix(absPath, ".go") + "_gen.go"
+		outFile := strings.TrimSuffix(absPath, suffix) + "_gen.go"
 
 		err = os.WriteFile(outFile, content, os.ModePerm)
 		if err != nil {

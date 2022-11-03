@@ -16,7 +16,7 @@ func init() {
 	os.Remove("../../test-package/source_gen.go")
 
 	var err error
-	ana, err = an.NewAnalyser("../../test-package/source.go")
+	ana, err = an.NewAnalyser("../../test-package/source_src.go")
 	if err != nil {
 		panic(err)
 	}

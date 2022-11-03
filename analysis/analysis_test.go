@@ -12,7 +12,7 @@ var ana Analyser
 
 func init() {
 	var err error
-	ana, err = NewAnalyser("../test-package/source.go")
+	ana, err = NewAnalyser("../test-package/source_src.go")
 	if err != nil {
 		panic(err)
 	}
