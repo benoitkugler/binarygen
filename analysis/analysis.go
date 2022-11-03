@@ -25,10 +25,6 @@ type Analyser struct {
 
 	pkg *packages.Package
 
-	// Sources contains only the structs
-	// from the source file
-	sources []*types.Named
-
 	// Tables contains the resolved struct definitions, coming from [Sources]
 	Tables map[*types.Named]Struct
 
@@ -80,7 +76,6 @@ func NewAnalyserFromPkg(pkg *packages.Package, sourcePath, sourceAbsPath string)
 		pkg:           pkg,
 	}
 
-	an.fetchSource()
 	an.fetchStructsComments()
 	an.fetchFieldAliases()
 	an.fetchUnionFlags()
@@ -89,7 +84,7 @@ func NewAnalyserFromPkg(pkg *packages.Package, sourcePath, sourceAbsPath string)
 
 	// perform the actual analysis
 	an.Tables = make(map[*types.Named]Struct)
-	for _, ty := range an.sources {
+	for _, ty := range an.fetchSource() {
 		an.handleTable(ty)
 	}
 
@@ -189,16 +184,18 @@ func (an *Analyser) allNamed() (out []*types.Named) {
 }
 
 // register the structs in the given input file
-func (an *Analyser) fetchSource() {
+func (an *Analyser) fetchSource() []*types.Named {
+	var out []*types.Named
 	for _, named := range an.allNamed() {
 		obj := named.Obj()
 		if _, isStruct := named.Underlying().(*types.Struct); isStruct {
 			// filter by input file
 			if an.pkg.Fset.File(obj.Pos()).Name() == an.sourceAbsPath {
-				an.sources = append(an.sources, named)
+				out = append(out, named)
 			}
 		}
 	}
+	return out
 }
 
 // look for integer constants with type <...>Version
@@ -243,7 +240,11 @@ func (an *Analyser) fetchInterfaces() {
 		}
 
 		// find the members of this interface
-		for _, st := range an.sources {
+		for _, st := range named {
+			// do not add the interface itself as member
+			if _, isItf := st.Underlying().(*types.Interface); isItf {
+				continue
+			}
 			if types.Implements(st, itf) {
 				an.interfaces[itf] = append(an.interfaces[itf], st)
 			}

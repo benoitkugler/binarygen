@@ -37,10 +37,6 @@ func TestParseSource(t *testing.T) {
 		t.Fatal()
 	}
 
-	if len(ana.sources) == 0 {
-		t.Fatal()
-	}
-
 	if len(ana.interfaces) == 0 {
 		t.Fatal()
 	}
@@ -50,6 +46,10 @@ func TestParseSource(t *testing.T) {
 	}
 
 	if len(ana.constructors) == 0 {
+		t.Fatal()
+	}
+
+	if len(ana.fetchSource()) == 0 {
 		t.Fatal()
 	}
 }
