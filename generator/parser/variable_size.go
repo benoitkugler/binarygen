@@ -9,7 +9,7 @@ import (
 )
 
 func parserForVariableSize(field an.Field, cc *gen.Context) string {
-	switch field.Type.(type) {
+	switch ty := field.Type.(type) {
 	case an.Slice:
 		return parserForSlice(field, cc)
 	case an.Opaque:
@@ -23,12 +23,12 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 			err error
 			read int
 		)
-		%s, read, err = parse%s(%s)
+		%s, read, err = parse%s(%s, %s)
 		if err != nil {
 			%s 
 		}
 		%s
-		`, cc.Selector(field.Name), strings.Title(gen.Name(field.Type)), cc.Slice,
+		`, cc.Selector(field.Name), strings.Title(gen.Name(field.Type)), cc.Slice, argumentsList(requiredArgs(ty)),
 			cc.ErrReturn("err"),
 			cc.Offset.UpdateStatementDynamic("read"))
 	}

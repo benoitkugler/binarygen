@@ -148,3 +148,11 @@ type WithArray struct {
 	b [4]uint32
 	c [3]byte
 }
+
+type withArgument struct {
+	array []uint16 // count is required
+}
+
+type WithChildArgument struct {
+	child withArgument
+}

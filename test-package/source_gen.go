@@ -49,6 +49,23 @@ func ParseWithArray(src []byte) (WithArray, int, error) {
 	return item, n, nil
 }
 
+func ParseWithChildArgument(src []byte, arrayCount int) (WithChildArgument, int, error) {
+	var item WithChildArgument
+	n := 0
+	{
+		var (
+			err  error
+			read int
+		)
+		item.child, read, err = parseWithArgument(src, arrayCount)
+		if err != nil {
+			return WithChildArgument{}, 0, err
+		}
+		n += read
+	}
+	return item, n, nil
+}
+
 func ParseWithOffset(src []byte) (WithOffset, int, error) {
 	var item WithOffset
 	n := 0
@@ -395,6 +412,24 @@ func parseVarSize(src []byte) (varSize, int, error) {
 			item.stucts[i].mustParse(src[n+i*4:])
 		}
 		n += arrayLength * 4
+	}
+	return item, n, nil
+}
+
+func parseWithArgument(src []byte, arrayCount int) (withArgument, int, error) {
+	var item withArgument
+	n := 0
+	{
+
+		if L := len(src); L < arrayCount*2 {
+			return withArgument{}, 0, fmt.Errorf("EOF: expected length: %d, got %d", arrayCount*2, L)
+		}
+
+		item.array = make([]uint16, arrayCount) // allocation guarded by the previous check
+		for i := range item.array {
+			item.array[i] = binary.BigEndian.Uint16(src[i*2:])
+		}
+		n += arrayCount * 2
 	}
 	return item, n, nil
 }

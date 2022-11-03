@@ -23,7 +23,7 @@ func init() {
 }
 
 func TestGenerateParser(t *testing.T) {
-	buf := gen.NewBuffer()
+	buf := gen.NewBuffer(make(gen.Accu))
 	ParsersForFile(ana, &buf)
 
 	content := []byte(fmt.Sprintf(`
