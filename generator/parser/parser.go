@@ -37,7 +37,7 @@ func readBasicTypeAt(cc gen.Context, size an.BinarySize) string {
 
 // check for <length> (from the start of the slice)
 func lengthCheck(cc gen.Context, length gen.Expression) string {
-	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", %s, L)`, length))
+	errReturn := cc.ErrReturn(gen.ErrFormated(fmt.Sprintf(`"EOF: expected length: %%d, got %%d", %s, L`, length)))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
 		%s
 	}
@@ -46,7 +46,7 @@ func lengthCheck(cc gen.Context, length gen.Expression) string {
 
 // check for <offset> + <size>, where size is known at compile time
 func staticLengthCheckAt(cc gen.Context, size an.BinarySize) string {
-	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %d, got %%d", L)`, size))
+	errReturn := cc.ErrReturn(gen.ErrFormated(fmt.Sprintf(`"EOF: expected length: %d, got %%d", L`, size)))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
 		%s
 	}`, cc.Slice, cc.Offset.With(size), errReturn)
@@ -80,7 +80,7 @@ func conditionalLengthCheck(args conditionalLength, cc gen.Context) string {
 		}
 		`, cd.variableName(), cd.size)
 	}
-	errReturn := cc.ErrReturn(fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", expectedLength, L)`))
+	errReturn := cc.ErrReturn(gen.ErrFormated(fmt.Sprintf(`"EOF: expected length: %%d, got %%d", expectedLength, L`)))
 	out += fmt.Sprintf(`if L := len(%s); L < expectedLength {
 		%s
 		}

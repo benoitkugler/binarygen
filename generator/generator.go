@@ -112,9 +112,27 @@ type Context struct {
 	Offset Offset
 }
 
+type Err interface {
+	wrap(context string) string
+}
+
+// simple 'err' statement
+type ErrVariable string
+
+func (ev ErrVariable) wrap(context string) string {
+	return fmt.Sprintf(`fmt.Errorf("reading %s: %%s", %s)`, context, ev)
+}
+
+// represent a fmt.Errorf(..., args) statement
+type ErrFormated string
+
+func (ef ErrFormated) wrap(context string) string {
+	return fmt.Sprintf(`fmt.Errorf("reading %s: " + %s)`, context, ef)
+}
+
 // ErrReturn returns a "return ..., err" statement
-func (cc Context) ErrReturn(errVariable string) string {
-	return fmt.Sprintf("return %s{}, 0, %s", cc.Type, errVariable)
+func (cc Context) ErrReturn(errVariable Err) string {
+	return fmt.Sprintf("return %s{}, 0, %s", cc.Type, errVariable.wrap(cc.Type))
 }
 
 // Selector returns a "<ObjectVar>.<field>" statement
@@ -131,10 +149,14 @@ func (cc *Context) SubSlice(subSlice Expression) string {
 	return out
 }
 
+func IsExported(typeName string) bool {
+	return unicode.IsUpper([]rune(typeName)[0])
+}
+
 // ParsingFunc adds the context to the given [scopes] and [args], also
 // adding the given comment as documentation
 func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Declaration {
-	isExported := unicode.IsUpper([]rune(cc.Type)[0])
+	isExported := IsExported(cc.Type)
 	funcTitle := "parse"
 	if isExported {
 		funcTitle = "Parse"

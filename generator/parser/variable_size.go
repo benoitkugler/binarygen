@@ -19,17 +19,21 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 	case an.Union:
 		return parserForUnion(field, cc)
 	case an.Struct:
+		prefix := "parse"
+		if gen.IsExported(gen.Name(field.Type)) {
+			prefix = "Parse"
+		}
 		return fmt.Sprintf(`var (
 			err error
 			read int
 		)
-		%s, read, err = parse%s(%s, %s)
+		%s, read, err = %s%s(%s[%s:], %s)
 		if err != nil {
 			%s 
 		}
 		%s
-		`, cc.Selector(field.Name), strings.Title(gen.Name(field.Type)), cc.Slice, argumentsList(requiredArgs(ty)),
-			cc.ErrReturn("err"),
+		`, cc.Selector(field.Name), prefix, strings.Title(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), argumentsList(requiredArgs(ty)),
+			cc.ErrReturn(gen.ErrVariable("err")),
 			cc.Offset.UpdateStatementDynamic("read"))
 	}
 	return ""
@@ -51,7 +55,7 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 	}
 	%s
 	`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start,
-		cc.ErrReturn("err"),
+		cc.ErrReturn(gen.ErrVariable("err")),
 		updateOffset,
 	)
 }
@@ -132,7 +136,7 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 		lengthDefinition = fmt.Sprintf("L := int(%s)", cc.Selector(sl.CountExpr))
 	}
 
-	errorStatement := fmt.Sprintf(`fmt.Errorf("EOF: expected length: %%d, got %%d", L, len(%s))`, cc.Slice)
+	errorStatement := fmt.Sprintf(`"EOF: expected length: %%d, got %%d", L, len(%s)`, cc.Slice)
 	return fmt.Sprintf(` 
 			%s
 			if len(%s) < L {
@@ -143,7 +147,7 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 			`,
 		lengthDefinition,
 		cc.Slice,
-		cc.ErrReturn(errorStatement),
+		cc.ErrReturn(gen.ErrFormated(errorStatement)),
 		target, cc.Slice, start,
 		cc.Offset.SetStatement("L"),
 	)
@@ -221,7 +225,7 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 		cc.Offset.Value(),
 		count,
 		strings.Title(gen.Name(sl.Elem)), cc.Slice,
-		cc.ErrReturn("err"),
+		cc.ErrReturn(gen.ErrVariable("err")),
 		cc.Selector(fieldName), cc.Selector(fieldName),
 		cc.Offset.SetStatement("offset"),
 	)
@@ -293,7 +297,7 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 		strings.Join(cases, "\n"),
 		gen.Name(u),
 		kindVariable,
-		cc.ErrReturn("err"),
+		cc.ErrReturn(gen.ErrVariable("err")),
 		updateOffset,
 	)
 }
