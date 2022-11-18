@@ -79,14 +79,14 @@ type multipleScopes struct {
 
 type customType map[string]int
 
-// customParse is called by the generated parsing code
-func (ct *customType) customParse(src []byte) (int, error) {
-	return 0, nil
-}
-
 type WithOpaque struct {
 	f      uint16
 	opaque customType `isOpaque:""`
+}
+
+// customParseOpaque is called by the generated parsing code
+func (wo *WithOpaque) customParseOpaque(src []byte) (int, error) {
+	return 0, nil
 }
 
 type WithSlices struct {

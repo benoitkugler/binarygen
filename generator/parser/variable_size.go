@@ -35,7 +35,8 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 	return ""
 }
 
-// delegate the parsing to a user written method
+// delegate the parsing to a user written method of the form
+// <structName>.customParse<fieldName>
 func parserForOpaque(field an.Field, cc *gen.Context) string {
 	start := cc.Offset.Value()
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
@@ -44,12 +45,12 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 		updateOffset = cc.Offset.SetStatement("read")
 	}
 	return fmt.Sprintf(`
-	read, err := %s.customParse(%s[%s:])
+	read, err := %s.customParse%s(%s[%s:])
 	if err != nil {
 		%s
 	}
 	%s
-	`, cc.Selector(field.Name), cc.Slice, start,
+	`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start,
 		cc.ErrReturn("err"),
 		updateOffset,
 	)

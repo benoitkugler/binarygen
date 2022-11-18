@@ -160,7 +160,7 @@ func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 	}
 	{
 
-		read, err := item.opaque.customParse(src[2:])
+		read, err := item.customParseOpaque(src[2:])
 		if err != nil {
 			return WithOpaque{}, 0, err
 		}
