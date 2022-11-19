@@ -153,15 +153,18 @@ func IsExported(typeName string) bool {
 	return unicode.IsUpper([]rune(typeName)[0])
 }
 
+func ParseFunctionName(typeName string) string {
+	prefix := "parse"
+	if IsExported(typeName) {
+		prefix = "Parse"
+	}
+	return prefix + strings.ToTitle(typeName)
+}
+
 // ParsingFunc adds the context to the given [scopes] and [args], also
 // adding the given comment as documentation
 func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Declaration {
-	isExported := IsExported(cc.Type)
-	funcTitle := "parse"
-	if isExported {
-		funcTitle = "Parse"
-	}
-	funcName := funcTitle + strings.Title(string(cc.Type))
+	funcName := ParseFunctionName(cc.Type)
 	if comment != "" {
 		comment = "// " + comment + "\n"
 	}
@@ -172,7 +175,7 @@ func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Decl
 	}
 	`, comment, funcName, strings.Join(args, ","), cc.Type, cc.ObjectVar,
 		cc.Type, strings.Join(scopes, "\n"), cc.ObjectVar, cc.Offset.Name)
-	return Declaration{ID: funcName, Content: content, IsExported: isExported}
+	return Declaration{ID: funcName, Content: content, IsExported: IsExported(cc.Type)}
 }
 
 // ParsingFunc adds the context to the given [scopes] and [args]
