@@ -9,7 +9,7 @@ The binary layout is specified in Go source files using struct tags :
 
 - 'arrayCount' : FirstUint16 | FirstUint32 | ToEnd | To-<XXX> | ComputedField-<XXX>
 - 'offsetSize' : Offset16 | Offset32
-- 'offsetsArray' : Offset16 | Offset32 , for an array of offsets
+- 'offsetsArray' : Offset16 | Offset32 , for an array of offsets. Zero offsets are resolved to zero values.
 - 'subsliceStart' : AtStart | AtCurrent
 - 'unionField' : the name of a previous field 
 - 'isOpaque' : anything (even the empty string)

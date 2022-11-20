@@ -294,6 +294,11 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	// Step 2 - check the length for the pointed value
 	// Step 3 - finally delegate to the target parser
 	loopBody := fmt.Sprintf(`offset := int(%s)
+	// ignore null offsets 
+	if offset == 0 {
+		continue
+	}
+	
 	%s
 	var err error
 	%s[i], _, err = %s(%s[offset:])

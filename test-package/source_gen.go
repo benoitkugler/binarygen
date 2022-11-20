@@ -165,6 +165,11 @@ func ParseWithOffsetArray(src []byte) (WithOffsetArray, int, error) {
 		item.array = make([]WithSlices, arrayLength) // allocation guarded by the previous check
 		for i := range item.array {
 			offset := int(binary.BigEndian.Uint32(src[2+i*4:]))
+			// ignore null offsets
+			if offset == 0 {
+				continue
+			}
+
 			if L := len(src); L < offset {
 				return WithOffsetArray{}, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: %d, got %d", offset, L)
 			}
