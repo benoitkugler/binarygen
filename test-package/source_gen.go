@@ -148,6 +148,39 @@ func ParseWithOffset(src []byte) (WithOffset, int, error) {
 	return item, n, nil
 }
 
+func ParseWithOffsetArray(src []byte) (WithOffsetArray, int, error) {
+	var item WithOffsetArray
+	n := 0
+	{
+		if L := len(src); L < 2 {
+			return WithOffsetArray{}, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: 2, got %d", L)
+		}
+		arrayLength := int(binary.BigEndian.Uint16(src[0:]))
+		n += 2
+
+		if L := len(src); L < 2+arrayLength*4 {
+			return WithOffsetArray{}, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: %d, got %d", 2+arrayLength*4, L)
+		}
+
+		item.array = make([]WithSlices, arrayLength) // allocation guarded by the previous check
+		for i := range item.array {
+			offset := int(binary.BigEndian.Uint32(src[2+i*4:]))
+			if L := len(src); L < offset {
+				return WithOffsetArray{}, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: %d, got %d", offset, L)
+			}
+
+			var err error
+			item.array[i], _, err = ParseWithSlices(src[offset:])
+			if err != nil {
+				return WithOffsetArray{}, 0, fmt.Errorf("reading WithOffsetArray: %s", err)
+			}
+
+		}
+		n += arrayLength * 4
+	}
+	return item, n, nil
+}
+
 func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 	var item WithOpaque
 	n := 0

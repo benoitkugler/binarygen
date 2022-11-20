@@ -158,7 +158,7 @@ func ParseFunctionName(typeName string) string {
 	if IsExported(typeName) {
 		prefix = "Parse"
 	}
-	return prefix + strings.ToTitle(typeName)
+	return prefix + strings.Title(typeName)
 }
 
 // ParsingFunc adds the context to the given [scopes] and [args], also

@@ -46,6 +46,10 @@ type WithOffset struct {
 	offsetToUnbounded []byte `offsetSize:"Offset16" arrayCount:"ToEnd"`
 }
 
+type WithOffsetArray struct {
+	array []WithSlices `arrayCount:"FirstUint16" offsetsArray:"Offset32"`
+}
+
 // Used to test []byte support
 type WithRawdata struct {
 	length          uint32

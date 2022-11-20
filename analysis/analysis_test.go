@@ -154,3 +154,15 @@ func TestArray(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestOffsetsArray(t *testing.T) {
+	ty := ana.Tables[ana.ByName("WithOffsetArray")]
+	sl := ty.Fields[0].Type.(Slice)
+	offset, isOffset := sl.Elem.(Offset)
+	if !isOffset {
+		t.Fatalf("%T", sl.Elem)
+	}
+	if _, isStruct := offset.Target.(Struct); !isStruct {
+		t.Fatalf("%T", offset.Target)
+	}
+}

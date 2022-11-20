@@ -14,7 +14,8 @@ type parsedTags struct {
 
 	subsliceStart SubsliceStart
 
-	offsetSize OffsetSize
+	offsetSize   OffsetSize
+	offsetsArray OffsetSize
 
 	unionField *types.Var
 
@@ -63,6 +64,16 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 	case "":
 	default:
 		panic("invalid tag for offsetSize: " + tag)
+	}
+
+	switch tag := tags.Get("offsetsArray"); tag {
+	case "Offset16":
+		out.offsetsArray = Offset16
+	case "Offset32":
+		out.offsetsArray = Offset32
+	case "":
+	default:
+		panic("invalid tag for offsetsArray: " + tag)
 	}
 
 	unionField := tags.Get("unionField")

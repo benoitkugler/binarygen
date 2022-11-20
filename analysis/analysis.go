@@ -350,16 +350,20 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		return an.createFromBasic(ty, decl)
 	case *types.Array:
 		elemDecl := sliceElement(decl)
+		// handle array of offsets by adujsting [offsetSize]
+		elemTags := parsedTags{offsetSize: tags.offsetsArray}
 		// recurse on the element
-		elem := an.createTypeFor(under.Elem(), parsedTags{}, elemDecl)
+		elem := an.createTypeFor(under.Elem(), elemTags, elemDecl)
 		return Array{origin: ty, Len: int(under.Len()), Elem: elem}
 	case *types.Struct:
 		// anonymous structs are not supported
 		return an.handleTable(ty.(*types.Named))
 	case *types.Slice:
 		elemDecl := sliceElement(decl)
+		// handle array of offsets by adujsting [offsetSize]
+		elemTags := parsedTags{offsetSize: tags.offsetsArray}
 		// recurse on the element
-		elem := an.createTypeFor(under.Elem(), parsedTags{}, elemDecl)
+		elem := an.createTypeFor(under.Elem(), elemTags, elemDecl)
 		return Slice{origin: ty, Elem: elem, Count: tags.arrayCount, CountExpr: tags.arrayCountField}
 	case *types.Interface:
 		if tags.unionField == nil {

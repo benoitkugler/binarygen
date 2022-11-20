@@ -147,6 +147,8 @@ func (ar Array) IsFixedSize() (BinarySize, bool) {
 }
 
 // Slice is a variable size array
+// If Elem is [Offset], it represents a slice of (variable sized) elements
+// written in binary as a slice of offsets
 type Slice struct {
 	origin types.Type
 

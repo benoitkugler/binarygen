@@ -63,6 +63,7 @@ func parserForOpaque(field an.Field, cc *gen.Context) string {
 //     and use mustParse on each element
 //   - elements have a variable length : we have to check the length at each iteration
 //   - as an optimization, we special case raw bytes (see [Slice.IsRawData])
+//   - slice of offsets are handled is in dedicated function
 //   - opaque types, whose interpretation is defered are represented by an [an.Opaque] type,
 //     and handled in a separate function
 func parserForSlice(field an.Field, cc *gen.Context) string {
@@ -79,6 +80,8 @@ func parserForSlice(field an.Field, cc *gen.Context) string {
 
 	if sl.IsRawData() { // special case for bytes data
 		codes = append(codes, parserForSliceBytes(sl, cc, countExpr, field.Name))
+	} else if offset, isOffset := sl.Elem.(an.Offset); isOffset { // special case for slice of offsets
+		codes = append(codes, parserForSliceOfOffsets(offset, cc, countExpr, field.Name))
 	} else if _, isFixedSize := sl.Elem.IsFixedSize(); isFixedSize { // else, check for fixed size elements
 		codes = append(codes, parserForSliceFixedSizeElement(sl, cc, countExpr, field.Name))
 	} else {
@@ -174,7 +177,7 @@ func parserForSliceFixedSizeElement(sl an.Slice, cc *gen.Context, count gen.Expr
 		target, gen.Name(sl.Elem), count))
 
 	// step 3 : loop to parse every elements,
-	// temporarily chaning the offset
+	// temporarily changing the offset
 	startOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
 	loopBody := mustParser(sl.Elem, *cc, fmt.Sprintf("%s[i]", fieldName))
@@ -234,6 +237,7 @@ func parserForOffset(fi an.Field, cc *gen.Context) string {
 	var statements []string
 	// Step 1 - check the length for the offset integer value
 	statements = append(statements, staticLengthCheckAt(*cc, of.Size))
+
 	// Step 2 - read the offset value
 	statements = append(statements, fmt.Sprintf("offset := int(%s)", readBasicTypeAt(*cc, of.Size)))
 	cc.Offset.Increment(of.Size)
@@ -252,6 +256,67 @@ func parserForOffset(fi an.Field, cc *gen.Context) string {
 	}, cc))
 	cc.Offset = savedOffset
 	return strings.Join(statements, "\n")
+}
+
+// slice of offsets: this is somewhat a mix of [parserForSliceVariableSizeElement] and [parserForOffset].
+// The generated code looks like :
+//
+//	if len(src) < arrayCount * offsetSize {
+//		return err
+//	}
+//	elems := make([]ElemType, arrayCount)
+//	for i := range elems {
+//		offset := readUint()
+//		if len(src) < offset {
+//			return err
+//		}
+//		elems[i] = parseElemType(src[offset:])
+//	}
+func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression, fieldName string) string {
+	target := cc.Selector(fieldName)
+	out := []string{""}
+
+	// step 1 : check the expected length
+	elementSize := of.Size
+	out = append(out, affineLengthCheckAt(*cc, count, elementSize))
+
+	// step 2 : allocate the slice of offsets target - it is garded by the check above
+	out = append(out, fmt.Sprintf("%s = make([]%s, %s) // allocation guarded by the previous check",
+		target, gen.Name(of.Target), count))
+
+	// step 3 : loop to parse every elements,
+	// temporarily changing the offset
+	startOffset := cc.Offset
+	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
+
+	// Loop body :
+	// Step 1 - read the offset value
+	// Step 2 - check the length for the pointed value
+	// Step 3 - finally delegate to the target parser
+	loopBody := fmt.Sprintf(`offset := int(%s)
+	%s
+	var err error
+	%s[i], _, err = %s(%s[offset:])
+	if err != nil {
+		%s
+	}
+	`,
+		readBasicTypeAt(*cc, elementSize),
+		lengthCheck(*cc, "offset"),
+		target, gen.ParseFunctionName(gen.Name(of.Target)), cc.Slice,
+		cc.ErrReturn(gen.ErrVariable("err")),
+	)
+
+	out = append(out, fmt.Sprintf(`for i := range %s {
+		%s
+	}`, target, loopBody))
+
+	// step 4 : update the offset
+	cc.Offset = startOffset
+	out = append(out,
+		cc.Offset.UpdateStatementDynamic(fmt.Sprintf("%s * %d", count, elementSize)))
+
+	return strings.Join(out, "\n")
 }
 
 // -- unions --
