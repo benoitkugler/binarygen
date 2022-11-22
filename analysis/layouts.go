@@ -73,6 +73,9 @@ type Field struct {
 	Type   Type
 	Layout Layout
 	Name   string
+	// name of other fields which will be provided
+	// to parsing/writing functions
+	ArgumentsProvidedByFields []string
 }
 
 // IsFixedSize returns true if all the fields have fixed size.

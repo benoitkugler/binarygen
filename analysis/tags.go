@@ -17,6 +17,8 @@ type parsedTags struct {
 	offsetSize   OffsetSize
 	offsetsArray OffsetSize
 
+	requiredFieldArguments []string
+
 	unionField *types.Var
 
 	// isCustom is true if the field has
@@ -85,6 +87,13 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 			}
 		}
 		panic("unknow field for union version: " + unionField)
+	}
+
+	if args := tags.Get("arguments"); args != "" {
+		out.requiredFieldArguments = strings.Split(tags.Get("arguments"), ",")
+		for i, a := range out.requiredFieldArguments {
+			out.requiredFieldArguments[i] = strings.TrimSpace(a)
+		}
 	}
 
 	_, out.isOpaque = tags.Lookup("isOpaque")

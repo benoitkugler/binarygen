@@ -53,7 +53,7 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	}
 
 	for _, scope := range scopes {
-		body = append(body, parser(scope, context))
+		body = append(body, parser(scope, ta, context))
 	}
 
 	finalCode := context.ParsingFuncComment(args, body, comment)
@@ -61,13 +61,13 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	return []gen.Declaration{finalCode}
 }
 
-func parser(scope an.Scope, cc *gen.Context) string {
+func parser(scope an.Scope, parent an.Struct, cc *gen.Context) string {
 	var code string
 	switch scope := scope.(type) {
 	case an.StaticSizedFields:
 		code = parserForFixedSize(scope, cc)
 	case an.SingleField:
-		code = parserForSingleField(scope, cc)
+		code = parserForSingleField(scope, parent, cc)
 	default:
 		panic("exhaustive type switch")
 	}
@@ -89,6 +89,6 @@ func parserForFixedSize(fs an.StaticSizedFields, cc *gen.Context) string {
 }
 
 // delegate to the type
-func parserForSingleField(field an.SingleField, cc *gen.Context) string {
-	return parserForVariableSize(an.Field(field), cc)
+func parserForSingleField(field an.SingleField, parent an.Struct, cc *gen.Context) string {
+	return parserForVariableSize(an.Field(field), parent, cc)
 }

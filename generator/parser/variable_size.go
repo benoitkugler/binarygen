@@ -8,17 +8,18 @@ import (
 	gen "github.com/benoitkugler/binarygen/generator"
 )
 
-func parserForVariableSize(field an.Field, cc *gen.Context) string {
+func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) string {
 	switch ty := field.Type.(type) {
 	case an.Slice:
 		return parserForSlice(field, cc)
 	case an.Opaque:
-		return parserForOpaque(field, cc)
+		return parserForOpaque(field, parent, cc)
 	case an.Offset:
-		return parserForOffset(field, cc)
+		return parserForOffset(field, parent, cc)
 	case an.Union:
 		return parserForUnion(field, cc)
 	case an.Struct:
+		args := resolveArguments(cc.ObjectVar, field, requiredArgs(ty))
 		return fmt.Sprintf(`var (
 			err error
 			read int
@@ -28,7 +29,7 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 			%s 
 		}
 		%s
-		`, cc.Selector(field.Name), gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), argumentsList(requiredArgs(ty)),
+		`, cc.Selector(field.Name), gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), args,
 			cc.ErrReturn(gen.ErrVariable("err")),
 			cc.Offset.UpdateStatementDynamic("read"))
 	}
@@ -37,20 +38,21 @@ func parserForVariableSize(field an.Field, cc *gen.Context) string {
 
 // delegate the parsing to a user written method of the form
 // <structName>.customParse<fieldName>
-func parserForOpaque(field an.Field, cc *gen.Context) string {
+func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 	start := cc.Offset.Value()
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
 	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""
 		updateOffset = cc.Offset.SetStatement("read")
 	}
+	args := resolveArguments(cc.ObjectVar, field, requiredArgs(parent))
 	return fmt.Sprintf(`
-	read, err := %s.customParse%s(%s[%s:])
+	read, err := %s.customParse%s(%s[%s:], %s)
 	if err != nil {
 		%s
 	}
 	%s
-	`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start,
+	`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start, args,
 		cc.ErrReturn(gen.ErrVariable("err")),
 		updateOffset,
 	)
@@ -81,11 +83,11 @@ func parserForSlice(field an.Field, cc *gen.Context) string {
 	if sl.IsRawData() { // special case for bytes data
 		codes = append(codes, parserForSliceBytes(sl, cc, countExpr, field.Name))
 	} else if offset, isOffset := sl.Elem.(an.Offset); isOffset { // special case for slice of offsets
-		codes = append(codes, parserForSliceOfOffsets(offset, cc, countExpr, field.Name))
+		codes = append(codes, parserForSliceOfOffsets(offset, cc, countExpr, field))
 	} else if _, isFixedSize := sl.Elem.IsFixedSize(); isFixedSize { // else, check for fixed size elements
 		codes = append(codes, parserForSliceFixedSizeElement(sl, cc, countExpr, field.Name))
 	} else {
-		codes = append(codes, parserForSliceVariableSizeElement(sl, cc, countExpr, field.Name))
+		codes = append(codes, parserForSliceVariableSizeElement(sl, cc, countExpr, field))
 	}
 
 	return strings.Join(codes, "\n")
@@ -206,14 +208,18 @@ func parserForSliceFixedSizeElement(sl an.Slice, cc *gen.Context, count gen.Expr
 //		offset += read
 //	}
 //	n = offset
-func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.Expression, fieldName string) string {
+func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.Expression, field an.Field) string {
 	// if start is a constant, we have to use an additional variable
 
+	args := ""
+	if st, isStruct := sl.Elem.(an.Struct); isStruct {
+		args = resolveArguments(cc.ObjectVar, field, requiredArgs(st))
+	}
 	// loop and update the offset
 	return fmt.Sprintf(`
 		offset := %s
 		for i := 0; i < %s; i++ {
-		elem, read, err := %s(%s[offset:])
+		elem, read, err := %s(%s[offset:], %s)
 		if err != nil {
 			%s
 		}
@@ -223,16 +229,16 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 		%s`,
 		cc.Offset.Value(),
 		count,
-		gen.ParseFunctionName(gen.Name(sl.Elem)), cc.Slice,
+		gen.ParseFunctionName(gen.Name(sl.Elem)), cc.Slice, args,
 		cc.ErrReturn(gen.ErrVariable("err")),
-		cc.Selector(fieldName), cc.Selector(fieldName),
+		cc.Selector(field.Name), cc.Selector(field.Name),
 		cc.Offset.SetStatement("offset"),
 	)
 }
 
 // ------------------------ Offsets ------------------------
 
-func parserForOffset(fi an.Field, cc *gen.Context) string {
+func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	of := fi.Type.(an.Offset)
 	var statements []string
 	// Step 1 - check the length for the offset integer value
@@ -253,7 +259,7 @@ func parserForOffset(fi an.Field, cc *gen.Context) string {
 		Type:   of.Target,
 		Layout: fi.Layout,
 		Name:   fi.Name,
-	}, cc))
+	}, parent, cc))
 	cc.Offset = savedOffset
 	return strings.Join(statements, "\n")
 }
@@ -272,8 +278,8 @@ func parserForOffset(fi an.Field, cc *gen.Context) string {
 //		}
 //		elems[i] = parseElemType(src[offset:])
 //	}
-func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression, fieldName string) string {
-	target := cc.Selector(fieldName)
+func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression, field an.Field) string {
+	target := cc.Selector(field.Name)
 	out := []string{""}
 
 	// step 1 : check the expected length
@@ -289,6 +295,11 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	startOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
 
+	args := ""
+	if st, isStruct := of.Target.(an.Struct); isStruct {
+		args = resolveArguments(cc.ObjectVar, field, requiredArgs(st))
+	}
+
 	// Loop body :
 	// Step 1 - read the offset value
 	// Step 2 - check the length for the pointed value
@@ -301,14 +312,14 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	
 	%s
 	var err error
-	%s[i], _, err = %s(%s[offset:])
+	%s[i], _, err = %s(%s[offset:], %s)
 	if err != nil {
 		%s
 	}
 	`,
 		readBasicTypeAt(*cc, elementSize),
 		lengthCheck(*cc, "offset"),
-		target, gen.ParseFunctionName(gen.Name(of.Target)), cc.Slice,
+		target, gen.ParseFunctionName(gen.Name(of.Target)), cc.Slice, args,
 		cc.ErrReturn(gen.ErrVariable("err")),
 	)
 
@@ -339,10 +350,11 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 	var cases []string
 	for i, flag := range u.Flags {
 		member := u.Members[i]
+		args := resolveArguments(cc.ObjectVar, fl, requiredArgs(member))
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = %s(%s[%s:], %s)`,
 			flag.Name(), cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(member)), cc.Slice,
-			start, argumentsList(requiredArgs(member)),
+			start, args,
 		))
 	}
 	kindVariable := cc.Selector(u.FlagField)

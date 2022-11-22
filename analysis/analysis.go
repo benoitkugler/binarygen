@@ -417,9 +417,10 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		fieldType := an.createTypeFor(field.Type(), tags, astDecl)
 
 		out.Fields[i] = Field{
-			Name:   field.Name(),
-			Type:   fieldType,
-			Layout: Layout{SubsliceStart: tags.subsliceStart},
+			Name:                      field.Name(),
+			Type:                      fieldType,
+			Layout:                    Layout{SubsliceStart: tags.subsliceStart},
+			ArgumentsProvidedByFields: tags.requiredFieldArguments,
 		}
 	}
 

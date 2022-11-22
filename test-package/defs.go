@@ -61,3 +61,7 @@ const _dummy1 = ""
 const _dummy2 = 2
 
 const _dummy3 flagNotVersion_ = 8
+
+func (WithChildArgument) customParseCustomWithArg(_ []byte, arrayCount int, kind uint16, version shiftedVersion) (int, error) {
+	return 0, nil
+}

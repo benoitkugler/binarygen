@@ -101,13 +101,32 @@ func (arg argument) asSignature() string {
 	return fmt.Sprintf("%s %s", arg.variableName, arg.typeName)
 }
 
-func argumentsList(arguments []argument) string {
+// select which arguments to pass to the child function,
+// among arguments provided by the parent struct or external
+func resolveArguments(itemName string, fi an.Field, requiredArguments []argument) string {
 	var args []string
-	for _, arg := range arguments {
-		args = append(args, arg.variableName)
+
+	if len(fi.ArgumentsProvidedByFields) != 0 {
+		for i, arg := range fi.ArgumentsProvidedByFields {
+			requiredType := requiredArguments[i].typeName
+			args = append(args, fmt.Sprintf("%s(%s.%s)", requiredType, itemName, arg))
+		}
+	} else {
+		for _, arg := range requiredArguments {
+			args = append(args, arg.variableName)
+		}
 	}
+
 	return strings.Join(args, ", ")
 }
+
+// func argumentsList(arguments []argument) string {
+// 	var args []string
+// 	for _, arg := range arguments {
+// 		args = append(args, arg.variableName)
+// 	}
+// 	return strings.Join(args, ", ")
+// }
 
 func requiredArgs(st an.Struct) (args []argument) {
 	for _, field := range st.Fields {
@@ -118,6 +137,9 @@ func requiredArgs(st an.Struct) (args []argument) {
 					variableName: externalCountVariable(field.Name),
 					typeName:     "int",
 				})
+			}
+			if elem, isStruct := ty.Elem.(an.Struct); isStruct { // recurse for the child
+				args = append(args, requiredArgs(elem)...)
 			}
 		case an.Union:
 			// return the union of the arguments for each member
