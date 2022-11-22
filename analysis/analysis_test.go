@@ -166,3 +166,10 @@ func TestOffsetsArray(t *testing.T) {
 		t.Fatalf("%T", offset.Target)
 	}
 }
+
+func TestExternalArguments(t *testing.T) {
+	ty := ana.Tables[ana.ByName("withArgument")]
+	if len(ty.Arguments) != 2 {
+		t.Fatal(ty.Arguments)
+	}
+}

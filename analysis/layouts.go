@@ -61,6 +61,10 @@ type Struct struct {
 	// be defined to indicate that the actual content of
 	// the struct starts at [StartingOffset] in the given byte slice.
 	StartingOffset int
+
+	// Arguments is not empty if the struct parsing/writting function
+	// requires data not provided in the input slice
+	Arguments []Argument
 }
 
 // Field is a struct field.

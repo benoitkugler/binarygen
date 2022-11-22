@@ -92,12 +92,21 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 	return out
 }
 
+type Argument struct {
+	VariableName string
+	TypeName     string
+}
+
 type commments struct {
 	// startingOffset may be provided if the type parsing/writting function
 	// expect its input slice not to start
 	// at the begining of the type data.
 	// If empty, it default to 0 (the begining of the subslice).
 	startingOffset string
+
+	// externalArguments may be provided it the type parsing/writting function
+	// requires data not provided in the input slice
+	externalArguments []Argument
 }
 
 // parse the type documentation looking for special comments
@@ -110,6 +119,9 @@ func parseComments(doc *ast.CommentGroup) (out commments) {
 		if _, value, ok := strings.Cut(comment.Text, " binarygen:"); ok {
 			if _, so, ok := strings.Cut(value, "startOffset="); ok {
 				out.startingOffset = so
+			} else if _, argDef, ok := strings.Cut(value, "argument="); ok {
+				name, typeN, _ := strings.Cut(argDef, " ")
+				out.externalArguments = append(out.externalArguments, Argument{VariableName: name, TypeName: typeN})
 			}
 		}
 	}

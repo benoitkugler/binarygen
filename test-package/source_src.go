@@ -153,6 +153,8 @@ type WithArray struct {
 	c [3]byte
 }
 
+// binarygen: argument=kind uint16
+// binarygen: argument=version shiftedVersion
 type withArgument struct {
 	array []uint16 // count is required
 }

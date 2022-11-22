@@ -49,7 +49,7 @@ func ParseWithArray(src []byte) (WithArray, int, error) {
 	return item, n, nil
 }
 
-func ParseWithChildArgument(src []byte, arrayCount int) (WithChildArgument, int, error) {
+func ParseWithChildArgument(src []byte, arrayCount int, kind uint16, version shiftedVersion) (WithChildArgument, int, error) {
 	var item WithChildArgument
 	n := 0
 	{
@@ -57,7 +57,7 @@ func ParseWithChildArgument(src []byte, arrayCount int) (WithChildArgument, int,
 			err  error
 			read int
 		)
-		item.child, read, err = parseWithArgument(src[0:], arrayCount)
+		item.child, read, err = parseWithArgument(src[0:], arrayCount, kind, version)
 		if err != nil {
 			return WithChildArgument{}, 0, fmt.Errorf("reading WithChildArgument: %s", err)
 		}
@@ -454,7 +454,7 @@ func parseVarSize(src []byte) (varSize, int, error) {
 	return item, n, nil
 }
 
-func parseWithArgument(src []byte, arrayCount int) (withArgument, int, error) {
+func parseWithArgument(src []byte, arrayCount int, kind uint16, version shiftedVersion) (withArgument, int, error) {
 	var item withArgument
 	n := 0
 	{

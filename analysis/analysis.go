@@ -390,12 +390,13 @@ func (an *Analyser) createFromBasic(ty types.Type, decl ast.Expr) Type {
 
 func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 	st := ty.Underlying().(*types.Struct)
+	cm := an.commentsMap[ty]
 	out := Struct{
-		origin: ty,
-		Fields: make([]Field, st.NumFields()),
+		origin:    ty,
+		Fields:    make([]Field, st.NumFields()),
+		Arguments: cm.externalArguments,
 	}
 
-	cm := an.commentsMap[ty]
 	if cm.startingOffset != "" {
 		// we only support integer shift for now
 		so, err := strconv.Atoi(cm.startingOffset)

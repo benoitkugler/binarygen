@@ -138,6 +138,10 @@ func requiredArgs(st an.Struct) (args []argument) {
 			args = append(args, requiredArgs(ty)...)
 		}
 	}
+	// add the user provided one
+	for _, arg := range st.Arguments {
+		args = append(args, argument{variableName: arg.VariableName, typeName: arg.TypeName})
+	}
 	return args
 }
 
