@@ -341,41 +341,79 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 	u := fl.Type.(an.Union)
 
 	start := cc.Offset.Value()
-	updateOffset := cc.Offset.UpdateStatementDynamic("read")
 	if fl.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""
-		updateOffset = cc.Offset.SetStatement("read")
 	}
 
+	flags := u.UnionTag.TagsCode()
 	var cases []string
-	for i, flag := range u.Flags {
+	for i, flag := range flags {
 		member := u.Members[i]
 		args := resolveArguments(cc.ObjectVar, fl, requiredArgs(member))
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = %s(%s[%s:], %s)`,
-			flag.Name(), cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(member)), cc.Slice,
+			flag, cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(member)), cc.Slice,
 			start, args,
 		))
 	}
-	kindVariable := cc.Selector(u.FlagField)
-	return fmt.Sprintf(`var (
-			read int
-			err error
-		)
-		switch %s {
-		%s
-		default:
-			err = fmt.Errorf("unsupported %sVersion %%d", %s)
-		}
-		if err != nil {
+
+	var code string
+	switch scheme := u.UnionTag.(type) {
+	case an.UnionTagExplicit:
+		kindVariable := cc.Selector(scheme.FlagField)
+		code = fmt.Sprintf(`var (
+				read int
+				err error
+			)
+			switch %s {
 			%s
-		}
-		%s
-		`, kindVariable,
-		strings.Join(cases, "\n"),
-		gen.Name(u),
-		kindVariable,
-		cc.ErrReturn(gen.ErrVariable("err")),
-		updateOffset,
-	)
+			default:
+				err = fmt.Errorf("unsupported %sVersion %%d", %s)
+			}
+			if err != nil {
+				%s
+			}
+			`, kindVariable,
+			strings.Join(cases, "\n"),
+			gen.Name(u),
+			kindVariable,
+			cc.ErrReturn(gen.ErrVariable("err")),
+		)
+	case an.UnionTagImplicit:
+		// steps :
+		// 	1 : check the length for the format tag
+		//	2 : read the format tag
+		//	3 : defer to the corresponding member parsing function
+		tagSize, _ := scheme.Tag.IsFixedSize()
+		code = fmt.Sprintf(`
+			%s
+			format := %s(%s)
+			var (
+				read int
+				err error
+			)
+			switch format {
+			%s
+			default:
+				err = fmt.Errorf("unsupported %s format %%d", format)
+			}
+			if err != nil {
+				%s
+			}
+			`,
+			staticLengthCheckAt(*cc, tagSize),
+			gen.Name(scheme.Tag), readBasicTypeAt(*cc, tagSize),
+			strings.Join(cases, "\n"),
+			gen.Name(u),
+			cc.ErrReturn(gen.ErrVariable("err")),
+		)
+	default:
+		panic("exhaustive type switch")
+	}
+
+	updateOffset := cc.Offset.UpdateStatementDynamic("read")
+	if fl.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
+		updateOffset = cc.Offset.SetStatement("read")
+	}
+	return code + updateOffset
 }

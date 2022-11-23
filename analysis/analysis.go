@@ -366,9 +366,6 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		elem := an.createTypeFor(under.Elem(), elemTags, elemDecl)
 		return Slice{origin: ty, Elem: elem, Count: tags.arrayCount, CountExpr: tags.arrayCountField}
 	case *types.Interface:
-		if tags.unionField == nil {
-			panic(fmt.Sprintf("union field with type %s is missing unionField tag", ty))
-		}
 		// anonymous interface are not supported
 		return an.createFromInterface(ty.(*types.Named), tags.unionField)
 	default:
@@ -421,6 +418,7 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 			Type:                      fieldType,
 			Layout:                    Layout{SubsliceStart: tags.subsliceStart},
 			ArgumentsProvidedByFields: tags.requiredFieldArguments,
+			UnionTag:                  tags.unionTag,
 		}
 	}
 
@@ -430,34 +428,47 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 func (an *Analyser) createFromInterface(ty *types.Named, unionField *types.Var) Union {
 	itfName := ty.Obj().Name()
 	itf := ty.Underlying().(*types.Interface)
-	flags := an.unionFlags[unionField.Type().(*types.Named)]
 	members := an.interfaces[itf]
-
 	// this can't be correct in practice
 	if len(members) == 0 {
 		panic(fmt.Sprintf("interface %s does not have any member", itfName))
 	}
-	// match flags and members
-	byVersion := map[string]*types.Const{}
-	for _, flag := range flags {
-		_, version, _ := strings.Cut(flag.Name(), "Version")
-		byVersion[version] = flag
-	}
 
-	out := Union{origin: ty, FlagField: unionField.Name()}
+	out := Union{origin: ty}
 	for _, member := range members {
-		memberName := member.Obj().Name()
-		// fetch the associated flag
-		version := strings.TrimPrefix(memberName, itfName)
-		flag, ok := byVersion[version]
-		if !ok {
-			panic(fmt.Sprintf("union flag %sVersion%s not defined", itfName, version))
-		}
 		// analyse the concrete type
 		st := an.handleTable(member)
 
 		out.Members = append(out.Members, st)
-		out.Flags = append(out.Flags, flag)
 	}
+
+	// resolve the union scheme, given priority to explicit
+	if unionField != nil { // explicit
+		flags := an.unionFlags[unionField.Type().(*types.Named)]
+		// match flags and members
+		byVersion := map[string]*types.Const{}
+		for _, flag := range flags {
+			_, version, _ := strings.Cut(flag.Name(), "Version")
+			byVersion[version] = flag
+		}
+
+		scheme := UnionTagExplicit{FlagField: unionField.Name()}
+		for _, member := range members {
+			memberName := member.Obj().Name()
+			// fetch the associated flag
+			version := strings.TrimPrefix(memberName, itfName)
+			flag, ok := byVersion[version]
+			if !ok {
+				panic(fmt.Sprintf("union flag %sVersion%s not defined", itfName, version))
+			}
+			scheme.Flags = append(scheme.Flags, flag)
+		}
+		out.UnionTag = scheme
+	} else if scheme, ok := isTagImplicit(out.Members); ok {
+		out.UnionTag = scheme
+	} else {
+		panic(fmt.Sprintf("union field with type %s is missing unionField tag", ty))
+	}
+
 	return out
 }

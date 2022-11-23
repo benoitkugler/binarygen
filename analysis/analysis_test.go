@@ -85,7 +85,7 @@ func TestInterfaces(t *testing.T) {
 	}
 
 	u := ana.Tables[ana.ByName("WithUnion")].Fields[2].Type.(Union)
-	if len(u.Flags) != 2 || len(u.Members) != 2 {
+	if len(u.UnionTag.(UnionTagExplicit).Flags) != 2 || len(u.Members) != 2 {
 		t.Fatal(u)
 	}
 }
@@ -171,5 +171,16 @@ func TestExternalArguments(t *testing.T) {
 	ty := ana.Tables[ana.ByName("withArgument")]
 	if len(ty.Arguments) != 2 {
 		t.Fatal(ty.Arguments)
+	}
+}
+
+func TestImplicitITF(t *testing.T) {
+	ty := ana.Tables[ana.ByName("WithImplicitITF")]
+	unionScheme, ok := ty.Fields[1].Type.(Union).UnionTag.(UnionTagImplicit)
+	if !ok {
+		t.Fatal()
+	}
+	if size, ok := unionScheme.Tag.IsFixedSize(); !ok || size != Uint16 {
+		t.Fatal()
 	}
 }

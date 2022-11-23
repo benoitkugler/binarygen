@@ -2,8 +2,10 @@ package analysis
 
 import (
 	"go/ast"
+	"go/constant"
 	"go/types"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +22,7 @@ type parsedTags struct {
 	requiredFieldArguments []string
 
 	unionField *types.Var
+	unionTag   constant.Value
 
 	// isCustom is true if the field has
 	// a custom parser/writter
@@ -87,6 +90,14 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 			}
 		}
 		panic("unknow field for union version: " + unionField)
+	}
+
+	if unionTag := tags.Get("unionTag"); unionTag != "" {
+		value, err := strconv.Atoi(unionTag)
+		if err != nil {
+			panic(err)
+		}
+		out.unionTag = constant.MakeInt64(int64(value))
 	}
 
 	if args := tags.Get("arguments"); args != "" {

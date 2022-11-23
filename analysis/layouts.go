@@ -1,6 +1,9 @@
 package analysis
 
-import "go/types"
+import (
+	"go/constant"
+	"go/types"
+)
 
 // BinarySize indicates how many bytes
 // are needed to store a value
@@ -73,9 +76,12 @@ type Field struct {
 	Type   Type
 	Layout Layout
 	Name   string
+
 	// name of other fields which will be provided
 	// to parsing/writing functions
 	ArgumentsProvidedByFields []string
+
+	UnionTag constant.Value
 }
 
 // IsFixedSize returns true if all the fields have fixed size.
@@ -179,23 +185,92 @@ func (sl Slice) IsRawData() bool {
 	return false
 }
 
-// Union represents an union of several types,
-// which are identified by constant flags.
-type Union struct {
-	origin *types.Named // with underlying type Interface
+// UnionTagScheme is a union type for the two schemes
+// supported : [UnionTagExplicit] or [UnionTagImplicit]
+type UnionTagScheme interface {
+	// TagsCode return the tags go code (like a constant name or a valid constant expression)
+	TagsCode() []string
+}
 
+func (ut UnionTagExplicit) TagsCode() []string {
+	out := make([]string, len(ut.Flags))
+	for i, t := range ut.Flags {
+		out[i] = t.Name()
+	}
+	return out
+}
+
+func (ut UnionTagImplicit) TagsCode() []string {
+	out := make([]string, len(ut.Flags))
+	for i, t := range ut.Flags {
+		out[i] = t.ExactString()
+	}
+	return out
+}
+
+// UnionTagExplicit uses a field and defined constants.
+// For instance :
+//
+//	type myStruct struct {
+//		kind unionTag
+//		data itf `unionField:"kind"`
+//	}
+//	type unionTag uint16
+//	const (
+//		unionTag1 = iota +1
+//		unionTag2
+//	 )
+type UnionTagExplicit struct {
 	// Flags are the possible flag values, in the same order as `Members`
 	Flags []*types.Const
-
-	// Members stores the possible members
-	Members []Struct
 
 	// FlagField is the struct field indicating which
 	// member is to be read
 	FlagField string
 }
 
+// UnionTagImplicit uses a common field and values defined by struct tags
+type UnionTagImplicit struct {
+	Tag   Type
+	Flags []constant.Value // in the same order as `Members`
+}
+
+// Union represents an union of several types,
+// which are identified by constant flags.
+type Union struct {
+	origin *types.Named // with underlying type Interface
+
+	// Members stores the possible members
+	Members []Struct
+
+	UnionTag UnionTagScheme
+}
+
 func (Union) IsFixedSize() (BinarySize, bool) { return 0, false }
+
+// isTagImplicit checks for a common tag in each members, which must be the
+// first field, and have same type.
+// If so, it returns the tag [Type]
+func isTagImplicit(members []Struct) (UnionTagImplicit, bool) {
+	out := UnionTagImplicit{
+		Flags: make([]constant.Value, len(members)),
+	}
+
+	all := map[types.Type]bool{}
+	for i, member := range members {
+		if len(member.Fields) == 0 {
+			return out, false
+		}
+		firstField := member.Fields[0]
+		all[firstField.Type.Origin()] = true
+		out.Flags[i] = firstField.UnionTag
+	}
+	if len(all) != 1 {
+		return out, false
+	}
+	out.Tag = members[0].Fields[0].Type
+	return out, true
+}
 
 // Opaque represents a type with no binary structure.
 // The parsing and writting step will be replaced by placeholder methods.

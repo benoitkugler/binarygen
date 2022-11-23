@@ -169,3 +169,29 @@ type PassArg struct {
 	count         int32
 	customWithArg withArgument `arguments:"count, kind, version"`
 }
+
+type WithImplicitITF struct {
+	field1 uint32
+	itf    ImplicitITF
+}
+
+type ImplicitITF interface {
+	isImplicitITF()
+}
+
+func (ImplicitITF1) isImplicitITF() {}
+func (ImplicitITF2) isImplicitITF() {}
+func (ImplicitITF3) isImplicitITF() {}
+
+type ImplicitITF1 struct {
+	kind uint16 `unionTag:"1"`
+	data [5]byte
+}
+type ImplicitITF2 struct {
+	kind uint16 `unionTag:"2"`
+	data [5]byte
+}
+type ImplicitITF3 struct {
+	kind uint16 `unionTag:"3"`
+	data [5]uint64
+}

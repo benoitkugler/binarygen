@@ -46,7 +46,7 @@ func lengthCheck(cc gen.Context, length gen.Expression) string {
 
 // check for <offset> + <size>, where size is known at compile time
 func staticLengthCheckAt(cc gen.Context, size an.BinarySize) string {
-	errReturn := cc.ErrReturn(gen.ErrFormated(fmt.Sprintf(`"EOF: expected length: %d, got %%d", L`, size)))
+	errReturn := cc.ErrReturn(gen.ErrFormated(fmt.Sprintf(`"EOF: expected length: %s, got %%d", L`, cc.Offset.With(size))))
 	return fmt.Sprintf(`if L := len(%s); L < %s {
 		%s
 	}`, cc.Slice, cc.Offset.With(size), errReturn)
