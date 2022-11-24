@@ -132,7 +132,7 @@ func (ef ErrFormated) wrap(context string) string {
 
 // ErrReturn returns a "return ..., err" statement
 func (cc Context) ErrReturn(errVariable Err) string {
-	return fmt.Sprintf("return %s{}, 0, %s", cc.Type, errVariable.wrap(cc.Type))
+	return fmt.Sprintf("return %s, 0, %s", cc.ObjectVar, errVariable.wrap(cc.Type))
 }
 
 // Selector returns a "<ObjectVar>.<field>" statement

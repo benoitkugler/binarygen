@@ -20,7 +20,7 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 		// TODO: for implicit interfaces, generate a separate parsing function
 		return parserForUnion(field, cc)
 	case an.Struct:
-		args := resolveArguments(cc.ObjectVar, field, requiredArgs(ty))
+		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty))
 		return fmt.Sprintf(`var (
 			err error
 			read int
@@ -46,7 +46,7 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 		start = ""
 		updateOffset = cc.Offset.SetStatement("read")
 	}
-	args := resolveArguments(cc.ObjectVar, field, requiredArgs(parent))
+	args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent))
 	return fmt.Sprintf(`
 	read, err := %s.customParse%s(%s[%s:], %s)
 	if err != nil {
@@ -214,7 +214,7 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 
 	args := ""
 	if st, isStruct := sl.Elem.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field, requiredArgs(st))
+		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st))
 	}
 	// loop and update the offset
 	return fmt.Sprintf(`
@@ -300,7 +300,7 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 
 	args := ""
 	if st, isStruct := of.Target.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field, requiredArgs(st))
+		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st))
 	}
 
 	// Loop body :
@@ -340,11 +340,9 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 
 // -- unions --
 
-func parserForUnion(fl an.Field, cc *gen.Context) string {
-	u := fl.Type.(an.Union)
-
+func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, providedArguments []string, target string) []string {
 	start := cc.Offset.Value()
-	if fl.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
+	if subsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""
 	}
 
@@ -352,13 +350,52 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 	var cases []string
 	for i, flag := range flags {
 		member := u.Members[i]
-		args := resolveArguments(cc.ObjectVar, fl, requiredArgs(member))
+		args := resolveArguments(cc.ObjectVar, providedArguments, requiredArgs(member))
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = %s(%s[%s:], %s)`,
-			flag, cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(member)), cc.Slice,
+			flag,
+			target, gen.ParseFunctionName(gen.Name(member)), cc.Slice,
 			start, args,
 		))
 	}
+	return cases
+}
+
+func standaloneUnionBody(u an.Union, cc *gen.Context, cases []string) string {
+	// steps :
+	// 	1 : check the length for the format tag
+	//	2 : read the format tag
+	//	3 : defer to the corresponding member parsing function
+	scheme := u.UnionTag.(an.UnionTagImplicit)
+	tagSize, _ := scheme.Tag.IsFixedSize()
+	return fmt.Sprintf(`
+			%s
+			format := %s(%s)
+			var (
+				read int
+				err error
+			)
+			switch format {
+			%s
+			default:
+				err = fmt.Errorf("unsupported %s format %%d", format)
+			}
+			if err != nil {
+				%s
+			}
+			`,
+		staticLengthCheckAt(*cc, tagSize),
+		gen.Name(scheme.Tag), readBasicTypeAt(*cc, tagSize),
+		strings.Join(cases, "\n"),
+		gen.Name(u),
+		cc.ErrReturn(gen.ErrVariable("err")),
+	)
+}
+
+func parserForUnion(fl an.Field, cc *gen.Context) string {
+	u := fl.Type.(an.Union)
+
+	cases := unionCases(u, fl.Layout.SubsliceStart, cc, fl.ArgumentsProvidedByFields, cc.Selector(fl.Name))
 
 	var code string
 	switch scheme := u.UnionTag.(type) {
@@ -383,33 +420,19 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 			cc.ErrReturn(gen.ErrVariable("err")),
 		)
 	case an.UnionTagImplicit:
-		// steps :
-		// 	1 : check the length for the format tag
-		//	2 : read the format tag
-		//	3 : defer to the corresponding member parsing function
-		tagSize, _ := scheme.Tag.IsFixedSize()
-		code = fmt.Sprintf(`
-			%s
-			format := %s(%s)
-			var (
-				read int
-				err error
-			)
-			switch format {
-			%s
-			default:
-				err = fmt.Errorf("unsupported %s format %%d", format)
-			}
-			if err != nil {
-				%s
-			}
-			`,
-			staticLengthCheckAt(*cc, tagSize),
-			gen.Name(scheme.Tag), readBasicTypeAt(*cc, tagSize),
-			strings.Join(cases, "\n"),
-			gen.Name(u),
-			cc.ErrReturn(gen.ErrVariable("err")),
+		// defed to the generated standalone function
+		args := resolveArguments(cc.ObjectVar, fl.ArgumentsProvidedByFields, requiredArgsForUnion(u))
+
+		code = fmt.Sprintf(`var (
+			err error
+			read int
 		)
+		%s, read, err = %s(%s[%s:], %s)
+		if err != nil {
+			%s 
+		}
+ 		`, cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(fl.Type)), cc.Slice, cc.Offset.Value(), args,
+			cc.ErrReturn(gen.ErrVariable("err")))
 	default:
 		panic("exhaustive type switch")
 	}

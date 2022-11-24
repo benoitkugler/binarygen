@@ -43,6 +43,10 @@ type Analyser struct {
 
 	// map type string to data storage
 	constructors map[string]*types.Basic
+
+	// StandaloneUnions returns the union with an implicit union tag scheme,
+	// for which standalone parsing/writing function should be generated
+	StandaloneUnions map[*types.Named]Union
 }
 
 // ImportSource loads the source go file with go/packages,
@@ -84,6 +88,7 @@ func NewAnalyserFromPkg(pkg *packages.Package, sourcePath, sourceAbsPath string)
 
 	// perform the actual analysis
 	an.Tables = make(map[*types.Named]Struct)
+	an.StandaloneUnions = make(map[*types.Named]Union)
 	for _, ty := range an.fetchSource() {
 		an.handleTable(ty)
 	}
@@ -466,6 +471,7 @@ func (an *Analyser) createFromInterface(ty *types.Named, unionField *types.Var) 
 		out.UnionTag = scheme
 	} else if scheme, ok := isTagImplicit(out.Members); ok {
 		out.UnionTag = scheme
+		an.StandaloneUnions[ty] = out
 	} else {
 		panic(fmt.Sprintf("union field with type %s is missing unionField tag", ty))
 	}

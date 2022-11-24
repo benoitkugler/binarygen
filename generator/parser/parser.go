@@ -103,11 +103,11 @@ func (arg argument) asSignature() string {
 
 // select which arguments to pass to the child function,
 // among arguments provided by the parent struct or external
-func resolveArguments(itemName string, fi an.Field, requiredArguments []argument) string {
+func resolveArguments(itemName string, providedArgs []string, requiredArguments []argument) string {
 	var args []string
 
-	if len(fi.ArgumentsProvidedByFields) != 0 {
-		for i, arg := range fi.ArgumentsProvidedByFields {
+	if len(providedArgs) != 0 {
+		for i, arg := range providedArgs {
 			requiredType := requiredArguments[i].typeName
 			args = append(args, fmt.Sprintf("%s(%s.%s)", requiredType, itemName, arg))
 		}
@@ -128,6 +128,22 @@ func resolveArguments(itemName string, fi an.Field, requiredArguments []argument
 // 	return strings.Join(args, ", ")
 // }
 
+// return the union of the arguments for each member
+func requiredArgsForUnion(ty an.Union) []argument {
+	all := map[argument]bool{}
+	for _, member := range ty.Members {
+		for _, arg := range requiredArgs(member) {
+			all[arg] = true
+		}
+	}
+	out := make([]argument, 0, len(all))
+	for arg := range all {
+		out = append(out, arg)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].variableName < out[j].variableName })
+	return out
+}
+
 func requiredArgs(st an.Struct) (args []argument) {
 	for _, field := range st.Fields {
 		switch ty := field.Type.(type) {
@@ -142,19 +158,7 @@ func requiredArgs(st an.Struct) (args []argument) {
 				args = append(args, requiredArgs(elem)...)
 			}
 		case an.Union:
-			// return the union of the arguments for each member
-			all := map[argument]bool{}
-			for _, member := range ty.Members {
-				for _, arg := range requiredArgs(member) {
-					all[arg] = true
-				}
-			}
-			out := make([]argument, 0, len(all))
-			for arg := range all {
-				out = append(out, arg)
-			}
-			sort.Slice(out, func(i, j int) bool { return out[i].variableName < out[j].variableName })
-
+			out := requiredArgsForUnion(ty)
 			args = append(args, out...)
 		case an.Struct: // recurse
 			args = append(args, requiredArgs(ty)...)

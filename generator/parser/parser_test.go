@@ -12,6 +12,7 @@ import (
 )
 
 func assertParseBlock(t *testing.T, code string) {
+	t.Helper()
 	code = fmt.Sprintf(`package main 
 	func main() {
 		%s
@@ -24,8 +25,9 @@ func assertParseBlock(t *testing.T, code string) {
 
 func Test_staticLengthCheck_code(t *testing.T) {
 	cc := gen.Context{
-		Type:  "lookup",
-		Slice: "data",
+		ObjectVar: "item",
+		Type:      "lookup",
+		Slice:     "data",
 	}
 	tests := []analysis.BinarySize{1, 5, 12}
 	for _, sl := range tests {
@@ -36,9 +38,10 @@ func Test_staticLengthCheck_code(t *testing.T) {
 
 func Test_affineLengthCheck_code(t *testing.T) {
 	cc := gen.Context{
-		Type:   "lookup",
-		Slice:  "data",
-		Offset: gen.NewOffset("n", 0),
+		ObjectVar: "item",
+		Type:      "lookup",
+		Slice:     "data",
+		Offset:    gen.NewOffset("n", 0),
 	}
 	tests := []struct {
 		count gen.Expression
@@ -55,8 +58,9 @@ func Test_affineLengthCheck_code(t *testing.T) {
 
 func Test_conditionalLengthCheck_code(t *testing.T) {
 	cc := gen.Context{
-		Type:  "lookup",
-		Slice: "data",
+		ObjectVar: "item",
+		Type:      "lookup",
+		Slice:     "data",
 	}
 	tests := []conditionalLength{
 		{

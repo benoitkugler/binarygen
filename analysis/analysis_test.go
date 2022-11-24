@@ -183,4 +183,8 @@ func TestImplicitITF(t *testing.T) {
 	if size, ok := unionScheme.Tag.IsFixedSize(); !ok || size != Uint16 {
 		t.Fatal()
 	}
+
+	if len(ana.StandaloneUnions) != 1 {
+		t.Fatal()
+	}
 }

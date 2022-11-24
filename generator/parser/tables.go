@@ -15,6 +15,10 @@ func ParsersForFile(ana an.Analyser, dst *gen.Buffer) {
 			dst.Add(decl)
 		}
 	}
+
+	for _, standaloneUnion := range ana.StandaloneUnions {
+		dst.Add(parserForStanaloneUnion(standaloneUnion))
+	}
 }
 
 // parserForTable returns the parsing function for the given table.
@@ -59,6 +63,26 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	finalCode := context.ParsingFuncComment(args, body, comment)
 
 	return []gen.Declaration{finalCode}
+}
+
+// parserForStanaloneUnion returns the parsing function for the given union.
+func parserForStanaloneUnion(un an.Union) gen.Declaration {
+	context := &gen.Context{
+		Type:      un.Origin().(*types.Named).Obj().Name(),
+		ObjectVar: "item",
+		Slice:     "src",                    // defined in args
+		Offset:    gen.NewOffset("read", 0), // defined later
+	}
+
+	body, args := []string{}, []string{"src []byte"}
+
+	cases := unionCases(un, an.AtCurrent, context, nil, context.ObjectVar)
+	code := standaloneUnionBody(un, context, cases)
+	body = append(body, code)
+
+	finalCode := context.ParsingFunc(args, body)
+
+	return finalCode
 }
 
 func parser(scope an.Scope, parent an.Struct, cc *gen.Context) string {
