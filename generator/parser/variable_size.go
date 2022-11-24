@@ -17,6 +17,7 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 	case an.Offset:
 		return parserForOffset(field, parent, cc)
 	case an.Union:
+		// TODO: for implicit interfaces, generate a separate parsing function
 		return parserForUnion(field, cc)
 	case an.Struct:
 		args := resolveArguments(cc.ObjectVar, field, requiredArgs(ty))
@@ -256,9 +257,11 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	savedOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic("offset")
 	statements = append(statements, parserForVariableSize(an.Field{
-		Type:   of.Target,
-		Layout: fi.Layout,
-		Name:   fi.Name,
+		Type:                      of.Target,
+		Layout:                    fi.Layout,
+		Name:                      fi.Name,
+		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
+		UnionTag:                  fi.UnionTag,
 	}, parent, cc))
 	cc.Offset = savedOffset
 	return strings.Join(statements, "\n")
