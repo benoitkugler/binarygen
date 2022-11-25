@@ -241,30 +241,44 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 
 func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	of := fi.Type.(an.Offset)
-	var statements []string
 	// Step 1 - check the length for the offset integer value
-	statements = append(statements, staticLengthCheckAt(*cc, of.Size))
+	lenCheck1 := staticLengthCheckAt(*cc, of.Size)
 
 	// Step 2 - read the offset value
-	statements = append(statements, fmt.Sprintf("offset := int(%s)", readBasicTypeAt(*cc, of.Size)))
+	readOffset := readBasicTypeAt(*cc, of.Size)
 	cc.Offset.Increment(of.Size)
 	// generally speaking with have to update the main offset as well
-	statements = append(statements, cc.Offset.UpdateStatement(of.Size))
+	incTracker := cc.Offset.UpdateStatement(of.Size)
+
 	// Step 3 - check the length for the pointed value
-	statements = append(statements, lengthCheck(*cc, "offset"))
+	lengthCheck1 := lengthCheck(*cc, "offset")
 
 	// Step 4 - finally delegate to the target parser
 	savedOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic("offset")
-	statements = append(statements, parserForVariableSize(an.Field{
+	readTarget := parserForVariableSize(an.Field{
 		Type:                      of.Target,
 		Layout:                    fi.Layout,
 		Name:                      fi.Name,
 		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
 		UnionTag:                  fi.UnionTag,
-	}, parent, cc))
+	}, parent, cc)
 	cc.Offset = savedOffset
-	return strings.Join(statements, "\n")
+
+	return fmt.Sprintf(`%s
+	offset := int(%s)
+	%s
+	if offset != 0 { // ignore null offset
+		%s
+		%s
+	}
+	`,
+		lenCheck1,
+		readOffset,
+		incTracker,
+		lengthCheck1,
+		readTarget,
+	)
 }
 
 // slice of offsets: this is somewhat a mix of [parserForSliceVariableSizeElement] and [parserForOffset].
