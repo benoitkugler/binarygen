@@ -120,14 +120,6 @@ func resolveArguments(itemName string, providedArgs []string, requiredArguments 
 	return strings.Join(args, ", ")
 }
 
-// func argumentsList(arguments []argument) string {
-// 	var args []string
-// 	for _, arg := range arguments {
-// 		args = append(args, arg.variableName)
-// 	}
-// 	return strings.Join(args, ", ")
-// }
-
 // return the union of the arguments for each member
 func requiredArgsForUnion(ty an.Union) []argument {
 	all := map[argument]bool{}
@@ -146,6 +138,12 @@ func requiredArgsForUnion(ty an.Union) []argument {
 
 func requiredArgs(st an.Struct) (args []argument) {
 	for _, field := range st.Fields {
+		// if the parent provides arguments to the child,
+		// do not considered are required for the parent
+		if len(field.ArgumentsProvidedByFields) != 0 {
+			continue
+		}
+
 		switch ty := field.Type.(type) {
 		case an.Slice:
 			if ty.Count == an.NoLength {
@@ -154,8 +152,13 @@ func requiredArgs(st an.Struct) (args []argument) {
 					typeName:     "int",
 				})
 			}
-			if elem, isStruct := ty.Elem.(an.Struct); isStruct { // recurse for the child
-				args = append(args, requiredArgs(elem)...)
+			switch elem := ty.Elem.(type) {
+			case an.Struct:
+				args = append(args, requiredArgs(elem)...) // recurse for the child
+			case an.Offset:
+				if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
+					args = append(args, requiredArgs(targetStruct)...) // recurse for the offset target
+				}
 			}
 		case an.Union:
 			out := requiredArgsForUnion(ty)
