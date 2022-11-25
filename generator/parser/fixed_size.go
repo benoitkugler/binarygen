@@ -11,23 +11,23 @@ import (
 // mustParser is only valid for type [ty] with a fixed sized,
 // it will panic otherwise
 // note thaht th
-func mustParser(ty an.Type, cc gen.Context, selector string) string {
+func mustParser(ty an.Type, cc gen.Context, target string) string {
 	switch ty := ty.(type) {
 	case an.Basic:
-		return mustParserBasic(ty, cc, selector)
+		return mustParserBasic(ty, cc, target)
 	case an.DerivedFromBasic:
-		return mustParserDerived(ty, cc, selector)
+		return mustParserDerived(ty, cc, target)
 	case an.Struct:
-		return mustParserStruct(ty, cc, selector)
+		return mustParserStruct(ty, cc, target)
 	case an.Array:
-		return mustParserArray(ty, cc, selector)
+		return mustParserArray(ty, cc, target)
 	default:
 		// other types are never fixed sized
 		panic(fmt.Sprintf("invalid type %T in mustParser", ty))
 	}
 }
 
-func mustParserBasic(bt an.Basic, cc gen.Context, selector string) string {
+func mustParserBasic(bt an.Basic, cc gen.Context, target string) string {
 	size, _ := bt.IsFixedSize()
 	readCode := readBasicTypeAt(cc, size)
 
@@ -35,23 +35,23 @@ func mustParserBasic(bt an.Basic, cc gen.Context, selector string) string {
 
 	switch name {
 	case "uint8", "byte", "uint16", "uint32", "uint64": // simplify by removing the unnecessary conversion
-		return fmt.Sprintf("%s = %s", cc.Selector(selector), readCode)
+		return fmt.Sprintf("%s = %s", target, readCode)
 	default:
-		return fmt.Sprintf("%s = %s(%s)", cc.Selector(selector), name, readCode)
+		return fmt.Sprintf("%s = %s(%s)", target, name, readCode)
 	}
 }
 
-func mustParserDerived(de an.DerivedFromBasic, cc gen.Context, selector string) string {
+func mustParserDerived(de an.DerivedFromBasic, cc gen.Context, target string) string {
 	readCode := readBasicTypeAt(cc, de.Size)
-	return fmt.Sprintf("%s = %sFromUint(%s)", cc.Selector(selector), de.Name, readCode)
+	return fmt.Sprintf("%s = %sFromUint(%s)", target, de.Name, readCode)
 }
 
 // only valid for fixed size structs, call the `mustParse` method
-func mustParserStruct(st an.Struct, cc gen.Context, selector string) string {
-	return fmt.Sprintf("%s.mustParse(%s[%s:])", cc.Selector(selector), cc.Slice, cc.Offset.Value())
+func mustParserStruct(st an.Struct, cc gen.Context, target string) string {
+	return fmt.Sprintf("%s.mustParse(%s[%s:])", target, cc.Slice, cc.Offset.Value())
 }
 
-func mustParserArray(ar an.Array, cc gen.Context, selector string) string {
+func mustParserArray(ar an.Array, cc gen.Context, target string) string {
 	elemSize, ok := ar.Elem.IsFixedSize()
 	if !ok {
 		panic("mustParserArray only support fixed size elements")
@@ -60,7 +60,7 @@ func mustParserArray(ar an.Array, cc gen.Context, selector string) string {
 	statements := make([]string, ar.Len)
 	for i := range statements {
 		// adjust the selector
-		elemSelector := fmt.Sprintf("%s[%d]", selector, i)
+		elemSelector := fmt.Sprintf("%s[%d]", target, i)
 		// generate the code
 		statements[i] = mustParser(ar.Elem, cc, elemSelector)
 		// update the context offset
@@ -82,7 +82,7 @@ func mustParserFields(fs an.StaticSizedFields, cc *gen.Context) string {
 	}
 
 	for _, field := range fs {
-		code = append(code, mustParser(field.Type, *cc, field.Name))
+		code = append(code, mustParser(field.Type, *cc, cc.Selector(field.Name)))
 
 		fieldSize, _ := field.Type.IsFixedSize()
 		// adjust the offset

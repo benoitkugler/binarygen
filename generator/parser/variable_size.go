@@ -183,7 +183,7 @@ func parserForSliceFixedSizeElement(sl an.Slice, cc *gen.Context, count gen.Expr
 	// temporarily changing the offset
 	startOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
-	loopBody := mustParser(sl.Elem, *cc, fmt.Sprintf("%s[i]", fieldName))
+	loopBody := mustParser(sl.Elem, *cc, fmt.Sprintf("%s[i]", cc.Selector(fieldName)))
 	out = append(out, fmt.Sprintf(`for i := range %s {
 		%s
 	}`, target, loopBody))
