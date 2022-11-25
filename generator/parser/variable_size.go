@@ -17,10 +17,9 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 	case an.Offset:
 		return parserForOffset(field, parent, cc)
 	case an.Union:
-		// TODO: for implicit interfaces, generate a separate parsing function
 		return parserForUnion(field, cc)
 	case an.Struct:
-		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty))
+		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
 		return fmt.Sprintf(`var (
 			err error
 			read int
@@ -46,7 +45,7 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 		start = ""
 		updateOffset = cc.Offset.SetStatement("read")
 	}
-	args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent))
+	args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent, field.Name))
 	return fmt.Sprintf(`
 	read, err := %s.customParse%s(%s[%s:], %s)
 	if err != nil {
@@ -100,19 +99,7 @@ func codeForSliceCount(sl an.Slice, fieldName string, cc *gen.Context) (countVar
 	case an.NoLength: // the length is provided as an external variable
 		countVar = externalCountVariable(fieldName)
 	case an.FirstUint16, an.FirstUint32: // the length is at the start of the array
-		countVar = "arrayLength"
-		// add the code to read it
-		size := an.Uint16
-		if sl.Count == an.FirstUint32 {
-			size = an.Uint32
-		}
-		// 1 - check the length
-		statements = append(statements, staticLengthCheckAt(*cc, size))
-		// 2 - read the value
-		statements = append(statements, fmt.Sprintf("%s := int(%s)", countVar, readBasicTypeAt(*cc, size)))
-		// 3 - increment the offset value
-		cc.Offset.Increment(size)
-		statements = append(statements, cc.Offset.UpdateStatement(size))
+		countVar = arrayCountName(cc.Selector(fieldName))
 	case an.ComputedField:
 		countVar = "arrayLength"
 		statements = append(statements, fmt.Sprintf("%s := int(%s)", countVar, cc.Selector(sl.CountExpr)))
@@ -214,7 +201,7 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 
 	args := ""
 	if st, isStruct := sl.Elem.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st))
+		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st, field.Name))
 	}
 	// loop and update the offset
 	return fmt.Sprintf(`
@@ -241,21 +228,15 @@ func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.E
 
 func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	of := fi.Type.(an.Offset)
-	// Step 1 - check the length for the offset integer value
-	lenCheck1 := staticLengthCheckAt(*cc, of.Size)
+	// Step 1 - Reading the offset value is already handled in fixed sized
 
-	// Step 2 - read the offset value
-	readOffset := readBasicTypeAt(*cc, of.Size)
-	cc.Offset.Increment(of.Size)
-	// generally speaking with have to update the main offset as well
-	incTracker := cc.Offset.UpdateStatement(of.Size)
+	// Step 2 - check the length for the pointed value
+	offsetVarName := offsetName(cc.Selector(fi.Name))
+	lengthCheck := lengthCheck(*cc, offsetVarName)
 
-	// Step 3 - check the length for the pointed value
-	lengthCheck1 := lengthCheck(*cc, "offset")
-
-	// Step 4 - finally delegate to the target parser
+	// Step 3 - finally delegate to the target parser
 	savedOffset := cc.Offset
-	cc.Offset = gen.NewOffsetDynamic("offset")
+	cc.Offset = gen.NewOffsetDynamic(offsetVarName)
 	readTarget := parserForVariableSize(an.Field{
 		Type:                      of.Target,
 		Layout:                    fi.Layout,
@@ -265,18 +246,14 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	}, parent, cc)
 	cc.Offset = savedOffset
 
-	return fmt.Sprintf(`%s
-	offset := int(%s)
-	%s
-	if offset != 0 { // ignore null offset
+	return fmt.Sprintf(` 
+	if %s != 0 { // ignore null offset
 		%s
 		%s
 	}
 	`,
-		lenCheck1,
-		readOffset,
-		incTracker,
-		lengthCheck1,
+		offsetVarName,
+		lengthCheck,
 		readTarget,
 	)
 }
@@ -314,7 +291,7 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 
 	args := ""
 	if st, isStruct := of.Target.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st))
+		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st, field.Name))
 	}
 
 	// Loop body :
@@ -364,7 +341,7 @@ func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, pro
 	var cases []string
 	for i, flag := range flags {
 		member := u.Members[i]
-		args := resolveArguments(cc.ObjectVar, providedArguments, requiredArgs(member))
+		args := resolveArguments(cc.ObjectVar, providedArguments, requiredArgs(member, target))
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = %s(%s[%s:], %s)`,
 			flag,
@@ -406,10 +383,10 @@ func standaloneUnionBody(u an.Union, cc *gen.Context, cases []string) string {
 	)
 }
 
-func parserForUnion(fl an.Field, cc *gen.Context) string {
-	u := fl.Type.(an.Union)
+func parserForUnion(field an.Field, cc *gen.Context) string {
+	u := field.Type.(an.Union)
 
-	cases := unionCases(u, fl.Layout.SubsliceStart, cc, fl.ArgumentsProvidedByFields, cc.Selector(fl.Name))
+	cases := unionCases(u, field.Layout.SubsliceStart, cc, field.ArgumentsProvidedByFields, cc.Selector(field.Name))
 
 	var code string
 	switch scheme := u.UnionTag.(type) {
@@ -435,7 +412,7 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 		)
 	case an.UnionTagImplicit:
 		// defed to the generated standalone function
-		args := resolveArguments(cc.ObjectVar, fl.ArgumentsProvidedByFields, requiredArgsForUnion(u))
+		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgsForUnion(u, field.Name))
 
 		code = fmt.Sprintf(`var (
 			err error
@@ -445,14 +422,14 @@ func parserForUnion(fl an.Field, cc *gen.Context) string {
 		if err != nil {
 			%s 
 		}
- 		`, cc.Selector(fl.Name), gen.ParseFunctionName(gen.Name(fl.Type)), cc.Slice, cc.Offset.Value(), args,
+ 		`, cc.Selector(field.Name), gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), args,
 			cc.ErrReturn(gen.ErrVariable("err")))
 	default:
 		panic("exhaustive type switch")
 	}
 
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
-	if fl.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
+	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
 		updateOffset = cc.Offset.SetStatement("read")
 	}
 	return code + updateOffset

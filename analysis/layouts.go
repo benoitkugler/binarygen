@@ -136,9 +136,9 @@ type Offset struct {
 	Size BinarySize
 }
 
-// IsFixedSize returns `false`, since, even if the offset itself has a fixed size,
+// IsFixedSize returns [Size], `false`, since, even if the offset itself has a fixed size,
 // the whole data has not and requires additional length check.
-func (Offset) IsFixedSize() (BinarySize, bool) { return 0, false }
+func (of Offset) IsFixedSize() (BinarySize, bool) { return of.Size, false }
 
 // Array is a fixed length array.
 type Array struct {
@@ -174,7 +174,10 @@ type Slice struct {
 	CountExpr string
 }
 
-func (Slice) IsFixedSize() (BinarySize, bool) { return 0, false }
+// IsFixedSize returns false and the length of the fixed size length prefix, if any.
+func (sl Slice) IsFixedSize() (BinarySize, bool) {
+	return sl.Count.Size(), false
+}
 
 // IsRawData returns true for []byte
 func (sl Slice) IsRawData() bool {

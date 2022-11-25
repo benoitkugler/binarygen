@@ -120,11 +120,40 @@ func resolveArguments(itemName string, providedArgs []string, requiredArguments 
 	return strings.Join(args, ", ")
 }
 
+func requiredArgs(ty an.Type, fieldName string) []argument {
+	switch ty := ty.(type) {
+	case an.Struct:
+		return requiredArgsForStruct(ty)
+	case an.Union:
+		return requiredArgsForUnion(ty, fieldName)
+	case an.Slice:
+		var args []argument
+		if ty.Count == an.NoLength {
+			args = append(args, argument{
+				variableName: externalCountVariable(fieldName),
+				typeName:     "int",
+			})
+		}
+		switch elem := ty.Elem.(type) {
+		case an.Struct:
+			args = append(args, requiredArgs(elem, fieldName)...) // recurse for the child
+		case an.Offset:
+			if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
+				args = append(args, requiredArgs(targetStruct, fieldName)...) // recurse for the offset target
+			}
+		}
+		return args
+	case an.Offset:
+		return requiredArgs(ty.Target, fieldName)
+	}
+	return nil
+}
+
 // return the union of the arguments for each member
-func requiredArgsForUnion(ty an.Union) []argument {
+func requiredArgsForUnion(ty an.Union, fieldName string) []argument {
 	all := map[argument]bool{}
 	for _, member := range ty.Members {
-		for _, arg := range requiredArgs(member) {
+		for _, arg := range requiredArgs(member, fieldName) {
 			all[arg] = true
 		}
 	}
@@ -136,7 +165,7 @@ func requiredArgsForUnion(ty an.Union) []argument {
 	return out
 }
 
-func requiredArgs(st an.Struct) (args []argument) {
+func requiredArgsForStruct(st an.Struct) (args []argument) {
 	for _, field := range st.Fields {
 		// if the parent provides arguments to the child,
 		// do not considered are required for the parent
@@ -144,28 +173,31 @@ func requiredArgs(st an.Struct) (args []argument) {
 			continue
 		}
 
-		switch ty := field.Type.(type) {
-		case an.Slice:
-			if ty.Count == an.NoLength {
-				args = append(args, argument{
-					variableName: externalCountVariable(field.Name),
-					typeName:     "int",
-				})
-			}
-			switch elem := ty.Elem.(type) {
-			case an.Struct:
-				args = append(args, requiredArgs(elem)...) // recurse for the child
-			case an.Offset:
-				if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
-					args = append(args, requiredArgs(targetStruct)...) // recurse for the offset target
-				}
-			}
-		case an.Union:
-			out := requiredArgsForUnion(ty)
-			args = append(args, out...)
-		case an.Struct: // recurse
-			args = append(args, requiredArgs(ty)...)
-		}
+		args = append(args, requiredArgs(field.Type, field.Name)...)
+		// switch ty := field.Type.(type) {
+		// case an.Slice:
+		// 	if ty.Count == an.NoLength {
+		// 		args = append(args, argument{
+		// 			variableName: externalCountVariable(field.Name),
+		// 			typeName:     "int",
+		// 		})
+		// 	}
+		// 	switch elem := ty.Elem.(type) {
+		// 	case an.Struct:
+		// 		args = append(args, requiredArgs(elem)...) // recurse for the child
+		// 	case an.Offset:
+		// 		if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
+		// 			args = append(args, requiredArgs(targetStruct)...) // recurse for the offset target
+		// 		}
+		// 	}
+		// case an.Offset:
+
+		// case an.Union:
+		// 	out := requiredArgsForUnion(ty)
+		// 	args = append(args, out...)
+		// case an.Struct: // recurse
+		// 	args = append(args, requiredArgs(ty)...)
+		// }
 	}
 	// add the user provided one
 	for _, arg := range st.Arguments {

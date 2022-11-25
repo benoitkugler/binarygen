@@ -38,7 +38,7 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	}
 
 	body, args := []string{fmt.Sprintf("n := %s", context.Offset.Value())}, []string{"src []byte"}
-	for _, arg := range requiredArgs(ta) {
+	for _, arg := range requiredArgs(ta, "") {
 		args = append(args, arg.asSignature())
 	}
 	comment := ""
@@ -95,8 +95,7 @@ func parser(scope an.Scope, parent an.Struct, cc *gen.Context) string {
 	default:
 		panic("exhaustive type switch")
 	}
-	return fmt.Sprintf(`{
-		%s}`, code)
+	return code
 }
 
 // add the length check
@@ -114,5 +113,7 @@ func parserForFixedSize(fs an.StaticSizedFields, cc *gen.Context) string {
 
 // delegate to the type
 func parserForSingleField(field an.SingleField, parent an.Struct, cc *gen.Context) string {
-	return parserForVariableSize(an.Field(field), parent, cc)
+	code := parserForVariableSize(an.Field(field), parent, cc)
+	return fmt.Sprintf(`{
+		%s}`, code)
 }

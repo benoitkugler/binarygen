@@ -12,7 +12,7 @@ func TestScopes(t *testing.T) {
 	}
 
 	l := ana.Tables[ana.ByName("multipleScopes")].Scopes()
-	if len(l) != 3 {
+	if len(l) != 5 {
 		t.Fatal(l)
 	}
 }

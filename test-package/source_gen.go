@@ -101,16 +101,15 @@ func ParseImplicitITF3(src []byte) (ImplicitITF3, int, error) {
 func ParsePassArg(src []byte) (PassArg, int, error) {
 	var item PassArg
 	n := 0
-	{
-		if L := len(src); L < 8 {
-			return item, 0, fmt.Errorf("reading PassArg: "+"EOF: expected length: 8, got %d", L)
-		}
-		_ = src[7] // early bound checking
-		item.kind = binary.BigEndian.Uint16(src[0:])
-		item.version = shiftedVersion(binary.BigEndian.Uint16(src[2:]))
-		item.count = int32(binary.BigEndian.Uint32(src[4:]))
-		n += 8
+	if L := len(src); L < 8 {
+		return item, 0, fmt.Errorf("reading PassArg: "+"EOF: expected length: 8, got %d", L)
 	}
+	_ = src[7] // early bound checking
+	item.kind = binary.BigEndian.Uint16(src[0:])
+	item.version = shiftedVersion(binary.BigEndian.Uint16(src[2:]))
+	item.count = int32(binary.BigEndian.Uint32(src[4:]))
+	n += 8
+
 	{
 		var (
 			err  error
@@ -128,13 +127,12 @@ func ParsePassArg(src []byte) (PassArg, int, error) {
 func ParseShiftedLayout(src []byte) (ShiftedLayout, int, error) {
 	var item ShiftedLayout
 	n := 0
-	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading ShiftedLayout: "+"EOF: expected length: 2, got %d", L)
-		}
-		item.version = shiftedVersion(binary.BigEndian.Uint16(src[0:]))
-		n += 2
+	if L := len(src); L < 2 {
+		return item, 0, fmt.Errorf("reading ShiftedLayout: "+"EOF: expected length: 2, got %d", L)
 	}
+	item.version = shiftedVersion(binary.BigEndian.Uint16(src[0:]))
+	n += 2
+
 	{
 		var (
 			read int
@@ -187,13 +185,12 @@ func ParseWithChildArgument(src []byte, arrayCount int, kind uint16, version shi
 func ParseWithImplicitITF(src []byte) (WithImplicitITF, int, error) {
 	var item WithImplicitITF
 	n := 0
-	{
-		if L := len(src); L < 4 {
-			return item, 0, fmt.Errorf("reading WithImplicitITF: "+"EOF: expected length: 4, got %d", L)
-		}
-		item.field1 = binary.BigEndian.Uint32(src[0:])
-		n += 4
+	if L := len(src); L < 4 {
+		return item, 0, fmt.Errorf("reading WithImplicitITF: "+"EOF: expected length: 4, got %d", L)
 	}
+	item.field1 = binary.BigEndian.Uint32(src[0:])
+	n += 4
+
 	{
 		var (
 			err  error
@@ -208,90 +205,68 @@ func ParseWithImplicitITF(src []byte) (WithImplicitITF, int, error) {
 	return item, n, nil
 }
 
-func ParseWithOffset(src []byte) (WithOffset, int, error) {
+func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error) {
 	var item WithOffset
 	n := 0
-	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 2, got %d", L)
-		}
-		item.version = binary.BigEndian.Uint16(src[0:])
-		n += 2
+	if L := len(src); L < 15 {
+		return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 15, got %d", L)
 	}
+	_ = src[14] // early bound checking
+	item.version = binary.BigEndian.Uint16(src[0:])
+	offsetItemoffsetToSlice := int(binary.BigEndian.Uint32(src[2:]))
+	offsetItemoffsetToStruct := int(binary.BigEndian.Uint32(src[6:]))
+	item.a = src[10]
+	item.b = src[11]
+	item.c = src[12]
+	offsetItemoffsetToUnbounded := int(binary.BigEndian.Uint16(src[13:]))
+	n += 15
+
 	{
-		if L := len(src); L < 6 {
-			return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 6, got %d", L)
-		}
-		offset := int(binary.BigEndian.Uint32(src[2:]))
-		n += 4
-		if offset != 0 { // ignore null offset
-			if L := len(src); L < offset {
-				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offset, L)
+
+		if offsetItemoffsetToSlice != 0 { // ignore null offset
+			if L := len(src); L < offsetItemoffsetToSlice {
+				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetItemoffsetToSlice, L)
 			}
 
-			if L := len(src); L < offset+2 {
-				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: offset + 2, got %d", L)
-			}
-			arrayLength := int(binary.BigEndian.Uint16(src[offset:]))
-			offset += 2
-
-			if L := len(src); L < offset+arrayLength*8 {
-				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offset+arrayLength*8, L)
+			if L := len(src); L < offsetItemoffsetToSlice+offsetToSliceCount*8 {
+				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetItemoffsetToSlice+offsetToSliceCount*8, L)
 			}
 
-			item.offsetToSlice = make([]uint64, arrayLength) // allocation guarded by the previous check
+			item.offsetToSlice = make([]uint64, offsetToSliceCount) // allocation guarded by the previous check
 			for i := range item.offsetToSlice {
-				item.offsetToSlice[i] = binary.BigEndian.Uint64(src[offset+i*8:])
+				item.offsetToSlice[i] = binary.BigEndian.Uint64(src[offsetItemoffsetToSlice+i*8:])
 			}
-			offset += arrayLength * 8
+			offsetItemoffsetToSlice += offsetToSliceCount * 8
 		}
 	}
 	{
-		if L := len(src); L < 10 {
-			return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 10, got %d", L)
-		}
-		offset := int(binary.BigEndian.Uint32(src[6:]))
-		n += 4
-		if offset != 0 { // ignore null offset
-			if L := len(src); L < offset {
-				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offset, L)
+
+		if offsetItemoffsetToStruct != 0 { // ignore null offset
+			if L := len(src); L < offsetItemoffsetToStruct {
+				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetItemoffsetToStruct, L)
 			}
 
 			var (
 				err  error
 				read int
 			)
-			item.offsetToStruct, read, err = parseVarSize(src[offset:])
+			item.offsetToStruct, read, err = parseVarSize(src[offsetItemoffsetToStruct:])
 			if err != nil {
 				return item, 0, fmt.Errorf("reading WithOffset: %s", err)
 			}
-			offset += read
+			offsetItemoffsetToStruct += read
 
 		}
 	}
 	{
-		if L := len(src); L < 13 {
-			return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 13, got %d", L)
-		}
-		_ = src[12] // early bound checking
-		item.a = src[10]
-		item.b = src[11]
-		item.c = src[12]
-		n += 3
-	}
-	{
-		if L := len(src); L < 15 {
-			return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 15, got %d", L)
-		}
-		offset := int(binary.BigEndian.Uint16(src[13:]))
-		n += 2
-		if offset != 0 { // ignore null offset
-			if L := len(src); L < offset {
-				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offset, L)
+
+		if offsetItemoffsetToUnbounded != 0 { // ignore null offset
+			if L := len(src); L < offsetItemoffsetToUnbounded {
+				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetItemoffsetToUnbounded, L)
 			}
 
-			item.offsetToUnbounded = src[offset:]
-			offset = len(src)
+			item.offsetToUnbounded = src[offsetItemoffsetToUnbounded:]
+			offsetItemoffsetToUnbounded = len(src)
 		}
 	}
 	return item, n, nil
@@ -300,18 +275,19 @@ func ParseWithOffset(src []byte) (WithOffset, int, error) {
 func ParseWithOffsetArray(src []byte) (WithOffsetArray, int, error) {
 	var item WithOffsetArray
 	n := 0
+	if L := len(src); L < 2 {
+		return item, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: 2, got %d", L)
+	}
+	arrayLengthItemarray := int(binary.BigEndian.Uint16(src[0:]))
+	n += 2
+
 	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: 2, got %d", L)
-		}
-		arrayLength := int(binary.BigEndian.Uint16(src[0:]))
-		n += 2
 
-		if L := len(src); L < 2+arrayLength*4 {
-			return item, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: %d, got %d", 2+arrayLength*4, L)
+		if L := len(src); L < 2+arrayLengthItemarray*4 {
+			return item, 0, fmt.Errorf("reading WithOffsetArray: "+"EOF: expected length: %d, got %d", 2+arrayLengthItemarray*4, L)
 		}
 
-		item.array = make([]WithSlices, arrayLength) // allocation guarded by the previous check
+		item.array = make([]WithSlices, arrayLengthItemarray) // allocation guarded by the previous check
 		for i := range item.array {
 			offset := int(binary.BigEndian.Uint32(src[2+i*4:]))
 			// ignore null offsets
@@ -330,7 +306,7 @@ func ParseWithOffsetArray(src []byte) (WithOffsetArray, int, error) {
 			}
 
 		}
-		n += arrayLength * 4
+		n += arrayLengthItemarray * 4
 	}
 	return item, n, nil
 }
@@ -338,13 +314,12 @@ func ParseWithOffsetArray(src []byte) (WithOffsetArray, int, error) {
 func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 	var item WithOpaque
 	n := 0
-	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading WithOpaque: "+"EOF: expected length: 2, got %d", L)
-		}
-		item.f = binary.BigEndian.Uint16(src[0:])
-		n += 2
+	if L := len(src); L < 2 {
+		return item, 0, fmt.Errorf("reading WithOpaque: "+"EOF: expected length: 2, got %d", L)
 	}
+	item.f = binary.BigEndian.Uint16(src[0:])
+	n += 2
+
 	{
 
 		read, err := item.customParseOpaque(src[:])
@@ -359,13 +334,12 @@ func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 func ParseWithRawdata(src []byte, defautCount int, startToCount int) (WithRawdata, int, error) {
 	var item WithRawdata
 	n := 0
-	{
-		if L := len(src); L < 4 {
-			return item, 0, fmt.Errorf("reading WithRawdata: "+"EOF: expected length: 4, got %d", L)
-		}
-		item.length = binary.BigEndian.Uint32(src[0:])
-		n += 4
+	if L := len(src); L < 4 {
+		return item, 0, fmt.Errorf("reading WithRawdata: "+"EOF: expected length: 4, got %d", L)
 	}
+	item.length = binary.BigEndian.Uint32(src[0:])
+	n += 4
+
 	{
 
 		L := int(4 + defautCount)
@@ -409,13 +383,12 @@ func ParseWithRawdata(src []byte, defautCount int, startToCount int) (WithRawdat
 func ParseWithSlices(src []byte) (WithSlices, int, error) {
 	var item WithSlices
 	n := 0
-	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading WithSlices: "+"EOF: expected length: 2, got %d", L)
-		}
-		item.length = binary.BigEndian.Uint16(src[0:])
-		n += 2
+	if L := len(src); L < 2 {
+		return item, 0, fmt.Errorf("reading WithSlices: "+"EOF: expected length: 2, got %d", L)
 	}
+	item.length = binary.BigEndian.Uint16(src[0:])
+	n += 2
+
 	{
 		arrayLength := int(item.length)
 
@@ -436,15 +409,14 @@ func ParseWithSlices(src []byte) (WithSlices, int, error) {
 func ParseWithUnion(src []byte) (WithUnion, int, error) {
 	var item WithUnion
 	n := 0
-	{
-		if L := len(src); L < 3 {
-			return item, 0, fmt.Errorf("reading WithUnion: "+"EOF: expected length: 3, got %d", L)
-		}
-		_ = src[2] // early bound checking
-		item.version = subtableFlagVersion(binary.BigEndian.Uint16(src[0:]))
-		item.otherField = src[2]
-		n += 3
+	if L := len(src); L < 3 {
+		return item, 0, fmt.Errorf("reading WithUnion: "+"EOF: expected length: 3, got %d", L)
 	}
+	_ = src[2] // early bound checking
+	item.version = subtableFlagVersion(binary.BigEndian.Uint16(src[0:]))
+	item.otherField = src[2]
+	n += 3
+
 	{
 		var (
 			read int
@@ -527,31 +499,26 @@ func parseSubtableShifted2(src []byte) (subtableShifted2, int, error) {
 func parseToBeEmbeded(src []byte) (toBeEmbeded, int, error) {
 	var item toBeEmbeded
 	n := 0
-	{
-		if L := len(src); L < 2 {
-			return item, 0, fmt.Errorf("reading toBeEmbeded: "+"EOF: expected length: 2, got %d", L)
-		}
-		_ = src[1] // early bound checking
-		item.a = src[0]
-		item.b = src[1]
-		n += 2
+	if L := len(src); L < 4 {
+		return item, 0, fmt.Errorf("reading toBeEmbeded: "+"EOF: expected length: 4, got %d", L)
 	}
+	_ = src[3] // early bound checking
+	item.a = src[0]
+	item.b = src[1]
+	arrayLengthItemc := int(binary.BigEndian.Uint16(src[2:]))
+	n += 4
+
 	{
-		if L := len(src); L < 4 {
-			return item, 0, fmt.Errorf("reading toBeEmbeded: "+"EOF: expected length: 4, got %d", L)
-		}
-		arrayLength := int(binary.BigEndian.Uint16(src[2:]))
-		n += 2
 
-		if L := len(src); L < 4+arrayLength*2 {
-			return item, 0, fmt.Errorf("reading toBeEmbeded: "+"EOF: expected length: %d, got %d", 4+arrayLength*2, L)
+		if L := len(src); L < 4+arrayLengthItemc*2 {
+			return item, 0, fmt.Errorf("reading toBeEmbeded: "+"EOF: expected length: %d, got %d", 4+arrayLengthItemc*2, L)
 		}
 
-		item.c = make([]uint16, arrayLength) // allocation guarded by the previous check
+		item.c = make([]uint16, arrayLengthItemc) // allocation guarded by the previous check
 		for i := range item.c {
 			item.c[i] = binary.BigEndian.Uint16(src[4+i*2:])
 		}
-		n += arrayLength * 2
+		n += arrayLengthItemc * 2
 	}
 	return item, n, nil
 }
@@ -559,46 +526,43 @@ func parseToBeEmbeded(src []byte) (toBeEmbeded, int, error) {
 func parseVarSize(src []byte) (varSize, int, error) {
 	var item varSize
 	n := 0
-	{
-		if L := len(src); L < 4 {
-			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: 4, got %d", L)
-		}
-		item.f1 = binary.BigEndian.Uint32(src[0:])
-		n += 4
+	if L := len(src); L < 6 {
+		return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: 6, got %d", L)
 	}
+	_ = src[5] // early bound checking
+	item.f1 = binary.BigEndian.Uint32(src[0:])
+	arrayLengthItemarray := int(binary.BigEndian.Uint16(src[4:]))
+	n += 6
+
 	{
-		if L := len(src); L < 6 {
-			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: 6, got %d", L)
-		}
-		arrayLength := int(binary.BigEndian.Uint16(src[4:]))
-		n += 2
 
-		if L := len(src); L < 6+arrayLength*4 {
-			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: %d, got %d", 6+arrayLength*4, L)
+		if L := len(src); L < 6+arrayLengthItemarray*4 {
+			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: %d, got %d", 6+arrayLengthItemarray*4, L)
 		}
 
-		item.array = make([]uint32, arrayLength) // allocation guarded by the previous check
+		item.array = make([]uint32, arrayLengthItemarray) // allocation guarded by the previous check
 		for i := range item.array {
 			item.array[i] = binary.BigEndian.Uint32(src[6+i*4:])
 		}
-		n += arrayLength * 4
+		n += arrayLengthItemarray * 4
 	}
+	if L := len(src); L < n+4 {
+		return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: n + 4, got %d", L)
+	}
+	arrayLengthItemstucts := int(binary.BigEndian.Uint32(src[n:]))
+	n += 4
+
 	{
-		if L := len(src); L < n+4 {
-			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: n + 4, got %d", L)
-		}
-		arrayLength := int(binary.BigEndian.Uint32(src[n:]))
-		n += 4
 
-		if L := len(src); L < n+arrayLength*4 {
-			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: %d, got %d", n+arrayLength*4, L)
+		if L := len(src); L < n+arrayLengthItemstucts*4 {
+			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: %d, got %d", n+arrayLengthItemstucts*4, L)
 		}
 
-		item.stucts = make([]withAlias, arrayLength) // allocation guarded by the previous check
+		item.stucts = make([]withAlias, arrayLengthItemstucts) // allocation guarded by the previous check
 		for i := range item.stucts {
 			item.stucts[i].mustParse(src[n+i*4:])
 		}
-		n += arrayLength * 4
+		n += arrayLengthItemstucts * 4
 	}
 	return item, n, nil
 }

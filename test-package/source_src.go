@@ -40,7 +40,7 @@ func (subtableITF2) isSubtableITF() {}
 // Used to test Offset support
 type WithOffset struct {
 	version           uint16
-	offsetToSlice     []uint64 `offsetSize:"Offset32" arrayCount:"FirstUint16"`
+	offsetToSlice     []uint64 `offsetSize:"Offset32"`
 	offsetToStruct    varSize  `offsetSize:"Offset32"`
 	a, b, c           byte
 	offsetToUnbounded []byte `offsetSize:"Offset16" arrayCount:"ToEnd"`
@@ -75,10 +75,11 @@ type singleScope struct {
 }
 
 type multipleScopes struct {
-	version uint16
-	x, y    int16
-	lookups []withFixedSize `arrayCount:"FirstUint16"`
-	array2  []uint32        `arrayCount:"FirstUint16"`
+	version  uint16
+	coverage []byte `offsetSize:"Offset16"`
+	x, y     int16
+	lookups  []withFixedSize `arrayCount:"FirstUint16"`
+	array2   []uint32        `arrayCount:"FirstUint16"`
 }
 
 type customType map[string]int

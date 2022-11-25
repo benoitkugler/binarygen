@@ -10,7 +10,6 @@ import (
 
 // mustParser is only valid for type [ty] with a fixed sized,
 // it will panic otherwise
-// note thaht th
 func mustParser(ty an.Type, cc gen.Context, target string) string {
 	switch ty := ty.(type) {
 	case an.Basic:
@@ -21,6 +20,10 @@ func mustParser(ty an.Type, cc gen.Context, target string) string {
 		return mustParserStruct(ty, cc, target)
 	case an.Array:
 		return mustParserArray(ty, cc, target)
+	case an.Offset:
+		return mustParserOffset(ty, cc, target)
+	case an.Slice:
+		return mustParseSlice(ty, cc, target)
 	default:
 		// other types are never fixed sized
 		panic(fmt.Sprintf("invalid type %T in mustParser", ty))
@@ -67,6 +70,27 @@ func mustParserArray(ar an.Array, cc gen.Context, target string) string {
 		cc.Offset.Increment(elemSize)
 	}
 	return strings.Join(statements, "\n")
+}
+
+func offsetName(target string) string {
+	return "offset" + strings.Title(strings.ReplaceAll(target, ".", ""))
+}
+
+// parse the offset value (not the target) in a temporary variable
+func mustParserOffset(of an.Offset, cc gen.Context, target string) string {
+	return fmt.Sprintf("%s := int(%s)", offsetName(target), readBasicTypeAt(cc, of.Size))
+}
+
+func arrayCountName(target string) string {
+	return "arrayLength" + strings.Title(strings.ReplaceAll(target, ".", ""))
+}
+
+func mustParseSlice(sl an.Slice, cc gen.Context, target string) string {
+	size := sl.Count.Size()
+	if size == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s := int(%s)", arrayCountName(target), readBasicTypeAt(cc, size))
 }
 
 // extension to a scope
