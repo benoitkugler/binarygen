@@ -30,11 +30,20 @@ type parsedTags struct {
 }
 
 func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
+	_, out.isOpaque = tags.Lookup("isOpaque")
+
 	switch tag := tags.Get("subsliceStart"); tag {
 	case "AtStart":
 		out.subsliceStart = AtStart
-	case "", "AtCurrent":
+	case "AtCurrent":
 		out.subsliceStart = AtCurrent
+	case "":
+		// make AtStart the default for opaque types
+		if out.isOpaque {
+			out.subsliceStart = AtStart
+		} else {
+			out.subsliceStart = AtCurrent
+		}
 	default:
 		panic("invalic tag for subsliceStart : " + tag)
 	}
@@ -106,8 +115,6 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 			out.requiredFieldArguments[i] = strings.TrimSpace(a)
 		}
 	}
-
-	_, out.isOpaque = tags.Lookup("isOpaque")
 
 	return out
 }
