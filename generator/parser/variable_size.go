@@ -37,7 +37,7 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 }
 
 // delegate the parsing to a user written method of the form
-// <structName>.customParse<fieldName>
+// <structName>.parse<fieldName>
 func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 	start := cc.Offset.Value()
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
@@ -47,7 +47,7 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 	}
 	args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent, field.Name))
 	return fmt.Sprintf(`
-	read, err := %s.customParse%s(%s[%s:], %s)
+	read, err := %s.parse%s(%s[%s:], %s)
 	if err != nil {
 		%s
 	}

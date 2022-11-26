@@ -89,8 +89,8 @@ type WithOpaque struct {
 	opaque customType `isOpaque:""`
 }
 
-// customParseOpaque is called by the generated parsing code
-func (wo *WithOpaque) customParseOpaque(src []byte) (int, error) {
+// parseOpaque is called by the generated parsing code
+func (wo *WithOpaque) parseOpaque(src []byte) (int, error) {
 	return 0, nil
 }
 
