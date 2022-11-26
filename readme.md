@@ -13,5 +13,6 @@ The binary layout is specified in Go source files using struct tags :
 - 'subsliceStart' : AtStart | AtCurrent
 - 'unionField' : the name of a previous field 
 - 'isOpaque' : anything (even the empty string)
+- 'arguments' : a comma separated list of values to pass to the field parsing function
 
 The special comment `// binarygen: startOffset=2` indicates that the table starts at `src[2:]`
