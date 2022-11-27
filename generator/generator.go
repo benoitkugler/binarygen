@@ -33,14 +33,9 @@ func (db *Buffer) Add(decl Declaration) {
 }
 
 // remove non exported, unused function declaration
-func (db Buffer) filterUnused() []Declaration {
+func (db Buffer) filterUnused(childTypes map[*types.Named]bool) []Declaration {
 	var filtered []Declaration
 	for i, decl := range db.decls {
-		if strings.Contains(decl.ID, ".") || decl.IsExported {
-			filtered = append(filtered, decl)
-			continue // always include methods and exported functions
-		}
-
 		isUsed := false
 		for j, other := range db.decls {
 			if i == j {
@@ -52,7 +47,8 @@ func (db Buffer) filterUnused() []Declaration {
 				break
 			}
 		}
-		if isUsed {
+		// remove unused declaration, unless it is an exported top level one or a method
+		if isUsed || strings.Contains(decl.ID, ".") || (decl.IsExported && !childTypes[decl.Origin]) {
 			filtered = append(filtered, decl)
 		}
 	}
@@ -63,9 +59,9 @@ func (db Buffer) filterUnused() []Declaration {
 
 // Code removes the unused declaration and returns
 // the final code.
-func (db Buffer) Code() string {
+func (db Buffer) Code(childTypes map[*types.Named]bool) string {
 	var builder strings.Builder
-	for _, decl := range db.filterUnused() {
+	for _, decl := range db.filterUnused(childTypes) {
 		builder.WriteString(decl.Content + "\n")
 	}
 	return builder.String()
@@ -77,6 +73,7 @@ type Declaration struct {
 	ID         string
 	Content    string
 	IsExported bool
+	Origin     *types.Named
 }
 
 // Name returns the representation of the given type in generated code,
@@ -163,7 +160,7 @@ func ParseFunctionName(typeName string) string {
 
 // ParsingFunc adds the context to the given [scopes] and [args], also
 // adding the given comment as documentation
-func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Declaration {
+func (cc Context) ParsingFuncComment(origin *types.Named, args, scopes []string, comment string) Declaration {
 	funcName := ParseFunctionName(cc.Type)
 	if comment != "" {
 		comment = "// " + comment + "\n"
@@ -175,12 +172,17 @@ func (cc Context) ParsingFuncComment(args, scopes []string, comment string) Decl
 	}
 	`, comment, funcName, strings.Join(args, ","), cc.Type, cc.ObjectVar,
 		cc.Type, strings.Join(scopes, "\n"), cc.ObjectVar, cc.Offset.Name)
-	return Declaration{ID: funcName, Content: content, IsExported: IsExported(cc.Type)}
+	return Declaration{
+		Origin:     origin,
+		ID:         funcName,
+		Content:    content,
+		IsExported: IsExported(cc.Type),
+	}
 }
 
 // ParsingFunc adds the context to the given [scopes] and [args]
-func (cc Context) ParsingFunc(args, scopes []string) Declaration {
-	return cc.ParsingFuncComment(args, scopes, "")
+func (cc Context) ParsingFunc(origin *types.Named, args, scopes []string) Declaration {
+	return cc.ParsingFuncComment(origin, args, scopes, "")
 }
 
 // offset management

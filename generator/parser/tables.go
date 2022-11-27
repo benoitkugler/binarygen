@@ -24,8 +24,9 @@ func ParsersForFile(ana an.Analyser, dst *gen.Buffer) {
 // parserForTable returns the parsing function for the given table.
 // The required methods for fields shall be generated in a separated step.
 func parserForTable(ta an.Struct) []gen.Declaration {
+	origin := ta.Origin().(*types.Named)
 	context := &gen.Context{
-		Type:      ta.Origin().(*types.Named).Obj().Name(),
+		Type:      origin.Obj().Name(),
 		ObjectVar: "item",
 		Slice:     "src",                                 // defined in args
 		Offset:    gen.NewOffset("n", ta.StartingOffset), // defined later
@@ -34,7 +35,7 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	scopes := ta.Scopes()
 	if len(scopes) == 0 {
 		// empty struct are useful : generate the trivial parser
-		return []gen.Declaration{context.ParsingFunc([]string{"[]byte"}, []string{"n := 0"})}
+		return []gen.Declaration{context.ParsingFunc(origin, []string{"[]byte"}, []string{"n := 0"})}
 	}
 
 	body, args := []string{fmt.Sprintf("n := %s", context.Offset.Value())}, []string{"src []byte"}
@@ -49,18 +50,17 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	// important special case when all fields have fixed size (with no offset) :
 	// generate a mustParse method
 	if _, isFixedSize := ta.IsFixedSize(); isFixedSize {
-		fs := scopes[0].(an.StaticSizedFields)
-		mustParse, parseBody := mustParserFieldsFunction(fs, *context)
+		mustParse, parseBody := mustParserFieldsFunction(ta, *context)
 		body = append(body, parseBody)
 
-		return []gen.Declaration{mustParse, context.ParsingFuncComment(args, body, comment)}
+		return []gen.Declaration{mustParse, context.ParsingFuncComment(origin, args, body, comment)}
 	}
 
 	for _, scope := range scopes {
 		body = append(body, parser(scope, ta, context))
 	}
 
-	finalCode := context.ParsingFuncComment(args, body, comment)
+	finalCode := context.ParsingFuncComment(origin, args, body, comment)
 
 	return []gen.Declaration{finalCode}
 }
@@ -80,7 +80,7 @@ func parserForStanaloneUnion(un an.Union) gen.Declaration {
 	code := standaloneUnionBody(un, context, cases)
 	body = append(body, code)
 
-	finalCode := context.ParsingFunc(args, body)
+	finalCode := context.ParsingFunc(un.Origin().(*types.Named), args, body)
 
 	return finalCode
 }

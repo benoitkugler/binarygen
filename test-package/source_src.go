@@ -5,7 +5,7 @@ package testpackage
 type startNoAtSubslice struct{}
 
 // Used to test that aliases are correctly retrieved
-type withAlias struct {
+type WithAlias struct {
 	f fl32
 }
 
@@ -102,7 +102,7 @@ type WithSlices struct {
 type varSize struct {
 	f1     uint32
 	array  []uint32    `arrayCount:"FirstUint16"`
-	stucts []withAlias `arrayCount:"FirstUint32"`
+	stucts []WithAlias `arrayCount:"FirstUint32"`
 }
 
 // ShiftedLayout is an exemple of interface

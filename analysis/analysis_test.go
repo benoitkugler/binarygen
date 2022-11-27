@@ -62,11 +62,11 @@ func TestStartingOffset(t *testing.T) {
 }
 
 func TestAliases(t *testing.T) {
-	if ty := ana.ByName("withAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
+	if ty := ana.ByName("WithAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
 		t.Fatal()
 	}
 
-	u := ana.Tables[ana.ByName("withAlias")].Fields[0]
+	u := ana.Tables[ana.ByName("WithAlias")].Fields[0]
 	if derived := u.Type.(DerivedFromBasic); derived.Name != "fl32" {
 		t.Fatal()
 	}
@@ -185,6 +185,19 @@ func TestImplicitITF(t *testing.T) {
 	}
 
 	if len(ana.StandaloneUnions) != 1 {
+		t.Fatal()
+	}
+}
+
+func TestChildTypes(t *testing.T) {
+	m := ana.ChildTypes
+	if _, isChild := m[ana.ByName("PassArg")]; isChild {
+		t.Fatal()
+	}
+	if _, isChild := m[ana.ByName("withArgument")]; !isChild {
+		t.Fatal()
+	}
+	if _, isChild := m[ana.ByName("WithAlias")]; !isChild {
 		t.Fatal()
 	}
 }

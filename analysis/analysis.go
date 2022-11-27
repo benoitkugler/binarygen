@@ -47,6 +47,10 @@ type Analyser struct {
 	// StandaloneUnions returns the union with an implicit union tag scheme,
 	// for which standalone parsing/writing function should be generated
 	StandaloneUnions map[*types.Named]Union
+
+	// ChildTypes contains types that are used in other types.
+	// For instance, top-level tables have a [false] value.
+	ChildTypes map[*types.Named]bool
 }
 
 // ImportSource loads the source go file with go/packages,
@@ -89,8 +93,9 @@ func NewAnalyserFromPkg(pkg *packages.Package, sourcePath, sourceAbsPath string)
 	// perform the actual analysis
 	an.Tables = make(map[*types.Named]Struct)
 	an.StandaloneUnions = make(map[*types.Named]Union)
+	an.ChildTypes = make(map[*types.Named]bool)
 	for _, ty := range an.fetchSource() {
-		an.handleTable(ty)
+		an.handleTable(ty, false)
 	}
 
 	return an
@@ -292,13 +297,18 @@ func (an *Analyser) fetchConstructors() {
 
 // handle table wraps [createFromStruct] by registering
 // the type in [Tables]
-func (an *Analyser) handleTable(ty *types.Named) Struct {
+func (an *Analyser) handleTable(ty *types.Named, isChildType bool) Struct {
+	if isChildType {
+		an.ChildTypes[ty] = true
+	}
+
 	if st, has := an.Tables[ty]; has {
 		return st
 	}
 
 	st := an.createFromStruct(ty)
 	an.Tables[ty] = st
+
 	return st
 }
 
@@ -362,7 +372,7 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		return Array{origin: ty, Len: int(under.Len()), Elem: elem}
 	case *types.Struct:
 		// anonymous structs are not supported
-		return an.handleTable(ty.(*types.Named))
+		return an.handleTable(ty.(*types.Named), true)
 	case *types.Slice:
 		elemDecl := sliceElement(decl)
 		// handle array of offsets by adujsting [offsetSize]
@@ -442,7 +452,7 @@ func (an *Analyser) createFromInterface(ty *types.Named, unionField *types.Var) 
 	out := Union{origin: ty}
 	for _, member := range members {
 		// analyse the concrete type
-		st := an.handleTable(member)
+		st := an.handleTable(member, true)
 
 		out.Members = append(out.Members, st)
 	}

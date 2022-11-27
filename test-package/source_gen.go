@@ -438,6 +438,10 @@ func ParseWithUnion(src []byte) (WithUnion, int, error) {
 	return item, n, nil
 }
 
+func (item *WithAlias) mustParse(src []byte) {
+	item.f = fl32FromUint(binary.BigEndian.Uint32(src[0:]))
+}
+
 func (item *WithArray) mustParse(src []byte) {
 	_ = src[20] // early bound checking
 	item.a = binary.BigEndian.Uint16(src[0:])
@@ -558,7 +562,7 @@ func parseVarSize(src []byte) (varSize, int, error) {
 			return item, 0, fmt.Errorf("reading varSize: "+"EOF: expected length: %d, got %d", n+arrayLengthItemstucts*4, L)
 		}
 
-		item.stucts = make([]withAlias, arrayLengthItemstucts) // allocation guarded by the previous check
+		item.stucts = make([]WithAlias, arrayLengthItemstucts) // allocation guarded by the previous check
 		for i := range item.stucts {
 			item.stucts[i].mustParse(src[n+i*4:])
 		}
@@ -623,10 +627,6 @@ func (item *subtableShifted1) mustParse(src []byte) {
 
 func (item *subtableShifted2) mustParse(src []byte) {
 	item.f = float64(binary.BigEndian.Uint64(src[2:]))
-}
-
-func (item *withAlias) mustParse(src []byte) {
-	item.f = fl32FromUint(binary.BigEndian.Uint32(src[0:]))
 }
 
 func (item *withFixedSize) mustParse(src []byte) {

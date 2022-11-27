@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"go/types"
 	"strings"
 
 	an "github.com/benoitkugler/binarygen/analysis"
@@ -117,10 +118,13 @@ func mustParserFields(fs an.StaticSizedFields, cc *gen.Context) string {
 }
 
 // return the mustParse method and the body of the parse function
-func mustParserFieldsFunction(fs an.StaticSizedFields, cc gen.Context) (mustParse gen.Declaration, parseBody string) {
+func mustParserFieldsFunction(ta an.Struct, cc gen.Context) (mustParse gen.Declaration, parseBody string) {
+	fs := ta.Scopes()[0].(an.StaticSizedFields)
+
 	contextCopy := cc
 	mustParseBody := mustParserFields(fs, &contextCopy) // pass a copy of context not influence the next calls
 
+	mustParse.Origin = ta.Origin().(*types.Named)
 	mustParse.ID = string(cc.Type) + ".mustParse"
 	mustParse.Content = fmt.Sprintf(`func (%s *%s) mustParse(%s []byte) {
 		%s
