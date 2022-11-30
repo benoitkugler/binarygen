@@ -52,6 +52,8 @@ func (st Struct) Scopes() (out []Scope) {
 		// else, close the current fixedSize array ...
 		if len(fixedSize) != 0 {
 			out = append(out, fixedSize)
+			out = append(out, offsetsFields...)
+			offsetsFields = nil
 			fixedSize = nil
 		}
 
