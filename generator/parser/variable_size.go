@@ -301,10 +301,8 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	startOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
 
-	args := resolveSliceArgument(fi.Type, *cc)
-	if st, isStruct := of.Target.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, fi.ArgumentsProvidedByFields, requiredArgs(st, fi.Name))
-	}
+	args := resolveSliceArgument(of.Target, *cc)
+	args = resolveArguments(cc.ObjectVar, fi.ArgumentsProvidedByFields, requiredArgs(of.Target, fi.Name))
 
 	// Loop body :
 	// Step 1 - read the offset value
