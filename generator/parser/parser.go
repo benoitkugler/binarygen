@@ -109,7 +109,11 @@ func resolveArguments(itemName string, providedArgs []string, requiredArguments 
 	if len(providedArgs) != 0 {
 		for i, arg := range providedArgs {
 			requiredType := requiredArguments[i].typeName
-			args = append(args, fmt.Sprintf("%s(%s.%s)", requiredType, itemName, arg))
+			argValue := arg
+			if strings.HasPrefix(arg, ".") {
+				argValue = itemName + arg
+			}
+			args = append(args, fmt.Sprintf("%s(%s)", requiredType, argValue))
 		}
 	} else {
 		for _, arg := range requiredArguments {

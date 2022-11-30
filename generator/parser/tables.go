@@ -82,6 +82,9 @@ func parserForStanaloneUnion(un an.Union) gen.Declaration {
 	}
 
 	body, args := []string{}, []string{"src []byte"}
+	for _, arg := range requiredArgsForUnion(un, "") {
+		args = append(args, arg.asSignature())
+	}
 
 	cases := unionCases(un, an.AtCurrent, context, nil, context.ObjectVar)
 	code := standaloneUnionBody(un, context, cases)
