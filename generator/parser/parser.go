@@ -124,12 +124,12 @@ func resolveSliceArgument(ty an.Type, cc gen.Context) string {
 	flag := an.ResolveOffsetRelative(ty)
 	var chunks []string
 	if flag&an.Parent != 0 {
-		chunks = append(chunks, cc.Slice)
+		chunks = append(chunks, cc.Slice+",")
 	}
 	if flag&an.GrandParent != 0 {
-		chunks = append(chunks, "parentSrc")
+		chunks = append(chunks, "parentSrc,")
 	}
-	return strings.Join(chunks, ", ")
+	return strings.Join(chunks, "")
 }
 
 func requiredArgs(ty an.Type, fieldName string) []argument {
