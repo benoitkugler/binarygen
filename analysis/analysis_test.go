@@ -201,3 +201,18 @@ func TestChildTypes(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestRelativeOffset(t *testing.T) {
+	ty := ana.Tables[ana.ByName("SubElement")]
+	if ty.resolveOffsetRelative() != GrandParent {
+		t.Fatal()
+	}
+	ty = ana.Tables[ana.ByName("Element")]
+	if ty.resolveOffsetRelative() != Parent {
+		t.Fatal()
+	}
+	ty = ana.Tables[ana.ByName("RootTable")]
+	if ty.resolveOffsetRelative() != Current {
+		t.Fatal()
+	}
+}

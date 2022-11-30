@@ -434,6 +434,7 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 			Layout:                    Layout{SubsliceStart: tags.subsliceStart},
 			ArgumentsProvidedByFields: tags.requiredFieldArguments,
 			UnionTag:                  tags.unionTag,
+			OffsetRelativeTo:          tags.offsetRelativeTo,
 		}
 	}
 

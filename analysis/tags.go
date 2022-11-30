@@ -16,8 +16,9 @@ type parsedTags struct {
 
 	subsliceStart SubsliceStart
 
-	offsetSize   OffsetSize
-	offsetsArray OffsetSize
+	offsetSize       OffsetSize
+	offsetsArray     OffsetSize
+	offsetRelativeTo OffsetRelative
 
 	requiredFieldArguments []string
 
@@ -88,6 +89,16 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 	case "":
 	default:
 		panic("invalid tag for offsetsArray: " + tag)
+	}
+
+	switch tag := tags.Get("offsetRelativeTo"); tag {
+	case "Parent":
+		out.offsetRelativeTo = Parent
+	case "GrandParent":
+		out.offsetRelativeTo = GrandParent
+	case "":
+	default:
+		panic("invalid tag for offsetRelativeTo: " + tag)
 	}
 
 	unionField := tags.Get("unionField")
@@ -226,3 +237,13 @@ func (os OffsetSize) binary() BinarySize {
 		return 0
 	}
 }
+
+// OffsetRelative indicates if the offset is related
+// to the current slice or the one of its parent type (or grand parent)
+type OffsetRelative uint8
+
+const (
+	Current     OffsetRelative = iota
+	Parent                     = 1 << 0
+	GrandParent                = 1 << 1
+)

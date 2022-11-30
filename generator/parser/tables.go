@@ -39,6 +39,13 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	}
 
 	body, args := []string{fmt.Sprintf("n := %s", context.Offset.Value())}, []string{"src []byte"}
+	flag := an.ResolveOffsetRelative(ta)
+	if flag&an.Parent != 0 {
+		args = append(args, "parentSrc []byte")
+	}
+	if flag&an.GrandParent != 0 {
+		args = append(args, "grandParentSrc []byte")
+	}
 	for _, arg := range requiredArgs(ta, "") {
 		args = append(args, arg.asSignature())
 	}

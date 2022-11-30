@@ -74,7 +74,11 @@ func mustParserArray(ar an.Array, cc gen.Context, target string) string {
 }
 
 func offsetName(target string) string {
-	return "offset" + strings.Title(strings.ReplaceAll(target, ".", ""))
+	_, name, ok := strings.Cut(target, ".")
+	if !ok {
+		name = target
+	}
+	return "offset" + strings.Title(name)
 }
 
 // parse the offset value (not the target) in a temporary variable
@@ -83,7 +87,11 @@ func mustParserOffset(of an.Offset, cc gen.Context, target string) string {
 }
 
 func arrayCountName(target string) string {
-	return "arrayLength" + strings.Title(strings.ReplaceAll(target, ".", ""))
+	_, name, ok := strings.Cut(target, ".")
+	if !ok {
+		name = target
+	}
+	return "arrayLength" + strings.Title(name)
 }
 
 func mustParseSlice(sl an.Slice, cc gen.Context, target string) string {

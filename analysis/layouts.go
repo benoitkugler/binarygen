@@ -81,7 +81,13 @@ type Field struct {
 	// to parsing/writing functions
 	ArgumentsProvidedByFields []string
 
+	// Non empty for fields indicating the kind of union
+	// (usually the first field)
 	UnionTag constant.Value
+
+	// Non zero if the offset must be resolved into
+	// the parent (or grand-parent) slice
+	OffsetRelativeTo OffsetRelative
 }
 
 // IsFixedSize returns true if all the fields have fixed size.
@@ -95,6 +101,44 @@ func (st Struct) IsFixedSize() (BinarySize, bool) {
 		totalSize += size
 	}
 	return totalSize, true
+}
+
+// ResolveOffsetRelative return the union flag of all
+// the fields.
+func ResolveOffsetRelative(ty Type) OffsetRelative {
+	switch ty := ty.(type) {
+	case Struct:
+		return ty.resolveOffsetRelative()
+	case Slice:
+		return ResolveOffsetRelative(ty.Elem)
+	case Offset:
+		return ResolveOffsetRelative(ty.Target)
+	case Union:
+		var out OffsetRelative
+		for _, member := range ty.Members {
+			out |= member.resolveOffsetRelative()
+		}
+		return out
+	default:
+		return 0
+	}
+}
+
+func (st Struct) resolveOffsetRelative() (out OffsetRelative) {
+	for _, field := range st.Fields {
+		if field.OffsetRelativeTo == Parent {
+			out |= Parent
+		} else if field.OffsetRelativeTo == GrandParent {
+			out |= GrandParent
+		}
+
+		// recurse
+		child := ResolveOffsetRelative(field.Type)
+		if child&GrandParent != 0 {
+			out |= Parent
+		}
+	}
+	return out
 }
 
 // Basic is a fixed size type, directly

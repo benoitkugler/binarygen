@@ -19,7 +19,8 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 	case an.Union:
 		return parserForUnion(field, cc)
 	case an.Struct:
-		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
+		args := resolveSliceArgument(field.Type, *cc)
+		args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
 		return fmt.Sprintf(`var (
 			err error
 			read int
@@ -199,9 +200,9 @@ func parserForSliceFixedSizeElement(sl an.Slice, cc *gen.Context, count gen.Expr
 func parserForSliceVariableSizeElement(sl an.Slice, cc *gen.Context, count gen.Expression, field an.Field) string {
 	// if start is a constant, we have to use an additional variable
 
-	args := ""
+	args := resolveSliceArgument(field.Type, *cc)
 	if st, isStruct := sl.Elem.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st, field.Name))
+		args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st, field.Name))
 	}
 	// loop and update the offset
 	return fmt.Sprintf(`
@@ -232,6 +233,14 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 
 	// Step 2 - check the length for the pointed value
 	offsetVarName := offsetName(cc.Selector(fi.Name))
+
+	// Step 2 - if needed adjust the source for the offset
+	savedSlice := cc.Slice
+	if fi.OffsetRelativeTo == an.Parent {
+		cc.Slice = "parentSrc"
+	} else if fi.OffsetRelativeTo == an.GrandParent {
+		cc.Slice = "grandParentSrc"
+	}
 	lengthCheck := lengthCheck(*cc, offsetVarName)
 
 	// Step 3 - finally delegate to the target parser
@@ -244,6 +253,9 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
 		UnionTag:                  fi.UnionTag,
 	}, parent, cc)
+
+	// restore value
+	cc.Slice = savedSlice
 	cc.Offset = savedOffset
 
 	return fmt.Sprintf(` 
@@ -272,8 +284,8 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 //		}
 //		elems[i] = parseElemType(src[offset:])
 //	}
-func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression, field an.Field) string {
-	target := cc.Selector(field.Name)
+func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression, fi an.Field) string {
+	target := cc.Selector(fi.Name)
 	out := []string{""}
 
 	// step 1 : check the expected length
@@ -289,39 +301,47 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	startOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
 
-	args := ""
+	args := resolveSliceArgument(fi.Type, *cc)
 	if st, isStruct := of.Target.(an.Struct); isStruct {
-		args = resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(st, field.Name))
+		args = resolveArguments(cc.ObjectVar, fi.ArgumentsProvidedByFields, requiredArgs(st, fi.Name))
 	}
 
 	// Loop body :
 	// Step 1 - read the offset value
-	// Step 2 - check the length for the pointed value
-	// Step 3 - finally delegate to the target parser
-	loopBody := fmt.Sprintf(`offset := int(%s)
-	// ignore null offsets 
-	if offset == 0 {
-		continue
+	readOffset := readBasicTypeAt(*cc, elementSize)
+	// Step 2 - adjust the source slice
+	savedSlice := cc.Slice
+	if fi.OffsetRelativeTo == an.Parent {
+		cc.Slice = "parentSrc"
+	} else if fi.OffsetRelativeTo == an.GrandParent {
+		cc.Slice = "grandParentSrc"
 	}
-	
-	%s
-	var err error
-	%s[i], _, err = %s(%s[offset:], %s)
-	if err != nil {
-		%s
-	}
-	`,
-		readBasicTypeAt(*cc, elementSize),
-		lengthCheck(*cc, "offset"),
-		target, gen.ParseFunctionName(gen.Name(of.Target)), cc.Slice, args,
-		cc.ErrReturn(gen.ErrVariable("err")),
-	)
+	// Step 3 - check the length for the pointed value
+	check := lengthCheck(*cc, "offset")
+	// Step 4 - finally delegate to the target parser
+	targetParse := fmt.Sprintf("%s[i], _, err = %s(%s[offset:], %s)", target, gen.ParseFunctionName(gen.Name(of.Target)), cc.Slice, args)
 
 	out = append(out, fmt.Sprintf(`for i := range %s {
+		offset := int(%s)
+		// ignore null offsets 
+		if offset == 0 {
+			continue
+		}
+		
 		%s
-	}`, target, loopBody))
+		var err error
+		%s
+		if err != nil {
+			%s
+		}
+	}`, target,
+		readOffset,
+		check,
+		targetParse,
+		cc.ErrReturn(gen.ErrVariable("err"))))
 
-	// step 4 : update the offset
+	// step 5 : update the offset
+	cc.Slice = savedSlice
 	cc.Offset = startOffset
 	out = append(out,
 		cc.Offset.UpdateStatementDynamic(fmt.Sprintf("%s * %d", count, elementSize)))
@@ -341,7 +361,8 @@ func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, pro
 	var cases []string
 	for i, flag := range flags {
 		member := u.Members[i]
-		args := resolveArguments(cc.ObjectVar, providedArguments, requiredArgs(member, target))
+		args := resolveSliceArgument(member, *cc)
+		args += resolveArguments(cc.ObjectVar, providedArguments, requiredArgs(member, target))
 		cases = append(cases, fmt.Sprintf(`case %s :
 		%s, read, err = %s(%s[%s:], %s)`,
 			flag,
@@ -412,7 +433,8 @@ func parserForUnion(field an.Field, cc *gen.Context) string {
 		)
 	case an.UnionTagImplicit:
 		// defed to the generated standalone function
-		args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgsForUnion(u, field.Name))
+		args := resolveSliceArgument(field.Type, *cc)
+		args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgsForUnion(u, field.Name))
 
 		code = fmt.Sprintf(`var (
 			err error

@@ -196,3 +196,19 @@ type ImplicitITF3 struct {
 	kind uint16 `unionTag:"3"`
 	data [5]uint64
 }
+
+type RootTable struct {
+	E  Element   `offsetSize:"Offset16"`
+	Es []Element `arrayCount:"FirstUint16"`
+}
+
+type Element struct {
+	A        int32
+	v        varSize      `offsetSize:"Offset32" offsetRelativeTo:"Parent"`
+	VarSizes []varSize    `arrayCount:"FirstUint16" offsetsArray:"Offset32" offsetRelativeTo:"Parent"`
+	sl       []SubElement `arrayCount:"FirstUint32"`
+}
+
+type SubElement struct {
+	v varSize `offsetSize:"Offset16" offsetRelativeTo:"GrandParent"`
+}

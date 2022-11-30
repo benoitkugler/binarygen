@@ -120,6 +120,18 @@ func resolveArguments(itemName string, providedArgs []string, requiredArguments 
 	return strings.Join(args, ", ")
 }
 
+func resolveSliceArgument(ty an.Type, cc gen.Context) string {
+	flag := an.ResolveOffsetRelative(ty)
+	var chunks []string
+	if flag&an.Parent != 0 {
+		chunks = append(chunks, cc.Slice)
+	}
+	if flag&an.GrandParent != 0 {
+		chunks = append(chunks, "parentSrc")
+	}
+	return strings.Join(chunks, ", ")
+}
+
 func requiredArgs(ty an.Type, fieldName string) []argument {
 	switch ty := ty.(type) {
 	case an.Struct:
@@ -174,30 +186,6 @@ func requiredArgsForStruct(st an.Struct) (args []argument) {
 		}
 
 		args = append(args, requiredArgs(field.Type, field.Name)...)
-		// switch ty := field.Type.(type) {
-		// case an.Slice:
-		// 	if ty.Count == an.NoLength {
-		// 		args = append(args, argument{
-		// 			variableName: externalCountVariable(field.Name),
-		// 			typeName:     "int",
-		// 		})
-		// 	}
-		// 	switch elem := ty.Elem.(type) {
-		// 	case an.Struct:
-		// 		args = append(args, requiredArgs(elem)...) // recurse for the child
-		// 	case an.Offset:
-		// 		if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
-		// 			args = append(args, requiredArgs(targetStruct)...) // recurse for the offset target
-		// 		}
-		// 	}
-		// case an.Offset:
-
-		// case an.Union:
-		// 	out := requiredArgsForUnion(ty)
-		// 	args = append(args, out...)
-		// case an.Struct: // recurse
-		// 	args = append(args, requiredArgs(ty)...)
-		// }
 	}
 	// add the user provided one
 	for _, arg := range st.Arguments {
