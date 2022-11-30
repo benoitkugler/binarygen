@@ -154,9 +154,7 @@ func requiredArgs(ty an.Type, fieldName string) []argument {
 		case an.Struct:
 			args = append(args, requiredArgs(elem, fieldName)...) // recurse for the child
 		case an.Offset:
-			if targetStruct, isStruct := elem.Target.(an.Struct); isStruct {
-				args = append(args, requiredArgs(targetStruct, fieldName)...) // recurse for the offset target
-			}
+			args = append(args, requiredArgs(elem.Target, fieldName)...) // recurse for the offset target
 		}
 		return args
 	case an.Offset:
