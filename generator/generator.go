@@ -196,6 +196,8 @@ type Offset struct {
 
 	// part of the value known at compile time, or -1
 	value int
+
+	tmpIncrement analysis.BinarySize
 }
 
 func NewOffset(name Expression, initialValue int) Offset {
@@ -210,7 +212,11 @@ func NewOffsetDynamic(name Expression) Offset {
 func (of Offset) Value() Expression {
 	if of.value != -1 {
 		// use the compile time value
-		return strconv.Itoa(of.value)
+		return strconv.Itoa(of.value + int(of.tmpIncrement))
+	}
+
+	if of.tmpIncrement != 0 {
+		return fmt.Sprintf("%s + %d", of.Name, of.tmpIncrement)
 	}
 
 	return of.Name
@@ -218,11 +224,8 @@ func (of Offset) Value() Expression {
 
 // With returns the optimal expression for <offset> + <size>
 func (of Offset) With(size analysis.BinarySize) Expression {
-	if of.value != -1 {
-		of.value += int(size) // not the copy, so the receiver is not modified
-		return of.Value()
-	}
-	return fmt.Sprintf("%s + %d", of.Name, size)
+	of.tmpIncrement += size // note the copy, so the receiver is not modified
+	return of.Value()
 }
 
 // WithAffine returns the optimal expression for <offset> + <count>*<size>
@@ -234,6 +237,7 @@ func (of Offset) WithAffine(count Expression, size analysis.BinarySize) Expressi
 // It is a no-op if the tracked value is unknown.
 func (of *Offset) Increment(size analysis.BinarySize) {
 	if of.value == -1 {
+		of.tmpIncrement += size
 		return
 	}
 	of.value += int(size)
@@ -242,7 +246,9 @@ func (of *Offset) Increment(size analysis.BinarySize) {
 // UpdateStatement returns a statement for <offset> += size,
 // without changing the tracked value, since
 // it has already been done with [Increment] calls.
-func (of Offset) UpdateStatement(size analysis.BinarySize) Expression {
+// It also reset the temporary increment.
+func (of *Offset) UpdateStatement(size analysis.BinarySize) Expression {
+	of.tmpIncrement = 0
 	return fmt.Sprintf("%s += %d", of.Name, size)
 }
 

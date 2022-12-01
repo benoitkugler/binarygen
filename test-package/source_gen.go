@@ -310,6 +310,36 @@ func ParseSubElement(src []byte, grandParentSrc []byte) (SubElement, int, error)
 	return item, n, nil
 }
 
+func ParseVariableThenFixed(src []byte) (VariableThenFixed, int, error) {
+	var item VariableThenFixed
+	n := 0
+	{
+		var (
+			err  error
+			read int
+		)
+		item.v, read, err = parseVarSize(src[0:])
+		if err != nil {
+			return item, 0, fmt.Errorf("reading VariableThenFixed: %s", err)
+		}
+		n += read
+	}
+	if L := len(src); L < n+11 {
+		return item, 0, fmt.Errorf("reading VariableThenFixed: "+"EOF: expected length: n + 11, got %d", L)
+	}
+	_ = src[n+10] // early bound checking
+	item.a = binary.BigEndian.Uint16(src[n:])
+	item.b = binary.BigEndian.Uint32(src[n+2:])
+	item.c[0] = src[n+6]
+	item.c[1] = src[n+7]
+	item.c[2] = src[n+8]
+	item.c[3] = src[n+9]
+	item.c[4] = src[n+10]
+	n += 11
+
+	return item, n, nil
+}
+
 func ParseWithArray(src []byte) (WithArray, int, error) {
 	var item WithArray
 	n := 0

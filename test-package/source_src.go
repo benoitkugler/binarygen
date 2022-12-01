@@ -212,3 +212,10 @@ type Element struct {
 type SubElement struct {
 	v varSize `offsetSize:"Offset16" offsetRelativeTo:"GrandParent"`
 }
+
+type VariableThenFixed struct {
+	v varSize
+	a uint16
+	b uint32
+	c [5]byte
+}
