@@ -106,10 +106,12 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 		for i := 0; i < st.NumFields(); i++ {
 			if fi := st.Field(i); fi.Name() == unionField {
 				out.unionField = fi
-				return out
+				break
 			}
 		}
-		panic("unknow field for union version: " + unionField)
+		if out.unionField == nil {
+			panic("unknow field for union version: " + unionField)
+		}
 	}
 
 	if unionTag := tags.Get("unionTag"); unionTag != "" {
