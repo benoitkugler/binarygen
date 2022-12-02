@@ -349,7 +349,7 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 
 // -- unions --
 
-func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, providedArguments []string, target string) []string {
+func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, providedArguments []an.ProvidedArgument, target string) []string {
 	start := cc.Offset.Value()
 	if subsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""

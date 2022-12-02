@@ -173,7 +173,7 @@ type PassArg struct {
 	kind          uint16
 	version       shiftedVersion
 	count         int32
-	customWithArg withArgument `arguments:".count, .kind, .version"`
+	customWithArg withArgument `arguments:"arrayCount=.count, kind=.kind, version=.version"`
 }
 
 type WithImplicitITF struct {

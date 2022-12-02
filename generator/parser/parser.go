@@ -103,15 +103,23 @@ func (arg argument) asSignature() string {
 
 // select which arguments to pass to the child function,
 // among arguments provided by the parent struct or external
-func resolveArguments(itemName string, providedArgs []string, requiredArguments []argument) string {
+func resolveArguments(itemName string, providedArgs []an.ProvidedArgument, requiredArguments []argument) string {
 	var args []string
 
 	if len(providedArgs) != 0 {
-		for i, arg := range providedArgs {
-			requiredType := requiredArguments[i].typeName
-			argValue := arg
-			if strings.HasPrefix(arg, ".") {
-				argValue = itemName + arg
+		m := map[string]string{}
+		for _, p := range providedArgs {
+			m[p.For] = p.Value
+		}
+
+		for _, arg := range requiredArguments {
+			requiredType := arg.typeName
+			argValue, ok := m[arg.variableName]
+			if !ok {
+				panic(fmt.Sprintf("missing argument %s", arg.variableName))
+			}
+			if strings.HasPrefix(argValue, ".") {
+				argValue = itemName + argValue
 			}
 			args = append(args, fmt.Sprintf("%s(%s)", requiredType, argValue))
 		}

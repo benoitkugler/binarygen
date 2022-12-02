@@ -75,6 +75,11 @@ type Struct struct {
 	ParseEnd *types.Func
 }
 
+type ProvidedArgument struct {
+	Value string // a go expression of the value
+	For   string // the argument name this value is providing
+}
+
 // Field is a struct field.
 // Embeded fields are not resolved.
 type Field struct {
@@ -84,7 +89,7 @@ type Field struct {
 
 	// name of other fields which will be provided
 	// to parsing/writing functions
-	ArgumentsProvidedByFields []string
+	ArgumentsProvidedByFields []ProvidedArgument
 
 	// Non empty for fields indicating the kind of union
 	// (usually the first field)

@@ -20,7 +20,7 @@ type parsedTags struct {
 	offsetsArray     OffsetSize
 	offsetRelativeTo OffsetRelative
 
-	requiredFieldArguments []string
+	requiredFieldArguments []ProvidedArgument
 
 	unionField *types.Var
 	unionTag   constant.Value
@@ -123,9 +123,17 @@ func newTags(st *types.Struct, tags reflect.StructTag) (out parsedTags) {
 	}
 
 	if args := tags.Get("arguments"); args != "" {
-		out.requiredFieldArguments = strings.Split(tags.Get("arguments"), ",")
-		for i, a := range out.requiredFieldArguments {
-			out.requiredFieldArguments[i] = strings.TrimSpace(a)
+		chunks := strings.Split(tags.Get("arguments"), ",")
+
+		for _, chunk := range chunks {
+			forName, value, ok := strings.Cut(chunk, "=")
+			if !ok {
+				panic("expected <argName>=<value>, got " + chunk)
+			}
+			out.requiredFieldArguments = append(out.requiredFieldArguments, ProvidedArgument{
+				Value: strings.TrimSpace(value),
+				For:   strings.TrimSpace(forName),
+			})
 		}
 	}
 
