@@ -68,6 +68,11 @@ type Struct struct {
 	// Arguments is not empty if the struct parsing/writting function
 	// requires data not provided in the input slice
 	Arguments []Argument
+
+	// HasParseEnd is non nil if the table has an
+	// additional "parseEnd" method which must be called
+	// at the end of parsing
+	ParseEnd *types.Func
 }
 
 // Field is a struct field.

@@ -753,6 +753,12 @@ func parseVarSize(src []byte) (varSize, int, error) {
 		}
 		n += arrayLengthStucts * 4
 	}
+	var err error
+	n, err = item.parseEnd(src)
+	if err != nil {
+		return item, 0, fmt.Errorf("reading varSize: %s", err)
+	}
+
 	return item, n, nil
 }
 

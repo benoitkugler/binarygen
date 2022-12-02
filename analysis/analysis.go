@@ -438,6 +438,14 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		}
 	}
 
+	for i := 0; i < ty.NumMethods(); i++ {
+		m := ty.Method(i)
+		if m.Name() == "parseEnd" {
+			out.ParseEnd = m
+			break
+		}
+	}
+
 	return out
 }
 

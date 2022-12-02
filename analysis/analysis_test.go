@@ -216,3 +216,10 @@ func TestRelativeOffset(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestParseEnd(t *testing.T) {
+	ty := ana.Tables[ana.ByName("varSize")]
+	if ty.ParseEnd == nil {
+		t.Fatal()
+	}
+}

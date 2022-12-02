@@ -105,6 +105,10 @@ type varSize struct {
 	stucts []WithAlias `arrayCount:"FirstUint32"`
 }
 
+func (v *varSize) parseEnd(src []byte) (int, error) {
+	return len(src), nil
+}
+
 // ShiftedLayout is an exemple of interface
 // members which require the whole slice to be parsed,
 // usually because of offset conventions.
