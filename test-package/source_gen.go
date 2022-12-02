@@ -365,6 +365,17 @@ func ParseWithChildArgument(src []byte, arrayCount int, kind uint16, version shi
 		}
 		n += read
 	}
+	{
+		var (
+			err  error
+			read int
+		)
+		item.child2, read, err = parseWithArgument(src[n:], arrayCount, kind, version)
+		if err != nil {
+			return item, 0, fmt.Errorf("reading WithChildArgument: %s", err)
+		}
+		n += read
+	}
 	return item, n, nil
 }
 

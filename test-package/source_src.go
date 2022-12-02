@@ -165,7 +165,8 @@ type withArgument struct {
 }
 
 type WithChildArgument struct {
-	child withArgument
+	child  withArgument
+	child2 withArgument
 }
 
 type PassArg struct {

@@ -180,6 +180,7 @@ func requiredArgsForUnion(ty an.Union, fieldName string) []argument {
 }
 
 func requiredArgsForStruct(st an.Struct) (args []argument) {
+	seen := map[argument]bool{}
 	for _, field := range st.Fields {
 		// if the parent provides arguments to the child,
 		// do not considered are required for the parent
@@ -187,7 +188,12 @@ func requiredArgsForStruct(st an.Struct) (args []argument) {
 			continue
 		}
 
-		args = append(args, requiredArgs(field.Type, field.Name)...)
+		for _, arg := range requiredArgs(field.Type, field.Name) {
+			if !seen[arg] {
+				args = append(args, arg)
+				seen[arg] = true
+			}
+		}
 	}
 	// add the user provided one
 	for _, arg := range st.Arguments {
