@@ -134,6 +134,10 @@ func resolveArguments(itemName string, providedArgs []an.ProvidedArgument, requi
 
 func resolveSliceArgument(ty an.Type, cc gen.Context) string {
 	flag := an.ResolveOffsetRelative(ty)
+	return sliceArgs(flag, cc)
+}
+
+func sliceArgs(flag an.OffsetRelative, cc gen.Context) string {
 	var chunks []string
 	if flag&an.Parent != 0 {
 		chunks = append(chunks, cc.Slice+",")

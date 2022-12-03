@@ -46,7 +46,9 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 		start = ""
 		updateOffset = cc.Offset.SetStatement("read")
 	}
-	args := resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent, field.Name))
+	// the offset for the opaque "child" type must be shifted by one level
+	args := sliceArgs(field.OffsetRelativeTo<<1, *cc)
+	args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent, field.Name))
 	return fmt.Sprintf(`
 	read, err := %s.parse%s(%s[%s:], %s)
 	if err != nil {
@@ -252,6 +254,7 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 		Name:                      fi.Name,
 		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
 		UnionTag:                  fi.UnionTag,
+		OffsetRelativeTo:          fi.OffsetRelativeTo,
 	}, parent, cc)
 
 	// restore value

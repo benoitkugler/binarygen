@@ -69,11 +69,12 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	// add the parseEnd when present
 	if ta.ParseEnd != nil {
 		body = append(body, fmt.Sprintf(`var err error 
-		n, err = %s.%s(%s)
+		n, err = %s.%s(%s, %s)
 		if err != nil {
 			%s
 		}
-		`, context.ObjectVar, ta.ParseEnd.Name(), context.Slice, context.ErrReturn(gen.ErrVariable("err"))))
+		`, context.ObjectVar, ta.ParseEnd.Name(), context.Slice, resolveArguments(context.ObjectVar, nil, requiredArgs(ta, "")),
+			context.ErrReturn(gen.ErrVariable("err"))))
 	}
 
 	finalCode := context.ParsingFuncComment(origin, args, body, comment)
