@@ -60,11 +60,6 @@ type Struct struct {
 	origin *types.Named
 	Fields []Field
 
-	// StartingOffset, defaulting to 0, maybe
-	// be defined to indicate that the actual content of
-	// the struct starts at [StartingOffset] in the given byte slice.
-	StartingOffset int
-
 	// Arguments is not empty if the struct parsing/writting function
 	// requires data not provided in the input slice
 	Arguments []Argument

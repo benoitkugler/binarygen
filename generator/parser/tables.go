@@ -28,8 +28,8 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	context := &gen.Context{
 		Type:      origin.Obj().Name(),
 		ObjectVar: "item",
-		Slice:     "src",                                 // defined in args
-		Offset:    gen.NewOffset("n", ta.StartingOffset), // defined later
+		Slice:     "src",                 // defined in args
+		Offset:    gen.NewOffset("n", 0), // defined later
 	}
 
 	scopes := ta.Scopes()
@@ -49,10 +49,6 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 	for _, arg := range requiredArgs(ta, "") {
 		args = append(args, arg.asSignature())
 	}
-	comment := ""
-	if ta.StartingOffset != 0 {
-		comment = fmt.Sprintf("the actual data starts at %s[%d:]", context.Slice, ta.StartingOffset)
-	}
 
 	// important special case when all fields have fixed size (with no offset) :
 	// generate a mustParse method
@@ -60,7 +56,7 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 		mustParse, parseBody := mustParserFieldsFunction(ta, *context)
 		body = append(body, parseBody)
 
-		return []gen.Declaration{mustParse, context.ParsingFuncComment(origin, args, body, comment)}
+		return []gen.Declaration{mustParse, context.ParsingFuncComment(origin, args, body, "")}
 	}
 
 	for _, scope := range scopes {
@@ -77,7 +73,7 @@ func parserForTable(ta an.Struct) []gen.Declaration {
 			context.ErrReturn(gen.ErrVariable("err"))))
 	}
 
-	finalCode := context.ParsingFuncComment(origin, args, body, comment)
+	finalCode := context.ParsingFuncComment(origin, args, body, "")
 
 	return []gen.Declaration{finalCode}
 }

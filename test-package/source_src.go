@@ -1,9 +1,5 @@
 package testpackage
 
-// Used to test the special comment below
-// binarygen: startOffset=2
-type startNoAtSubslice struct{}
-
 // Used to test that aliases are correctly retrieved
 type WithAlias struct {
 	f fl32
@@ -69,7 +65,7 @@ type singleScope struct {
 	e       int64
 	g, h    byte
 	t       tag
-	v       float214 `bin:"optional"`
+	v       float214
 	w       fl32
 	array1  [5]byte
 	array2  [5]uint16
@@ -110,38 +106,6 @@ func (v *varSize) parseEnd(src []byte) (int, error) {
 	return len(src), nil
 }
 
-// ShiftedLayout is an exemple of interface
-// members which require the whole slice to be parsed,
-// usually because of offset conventions.
-type ShiftedLayout struct {
-	version shiftedVersion
-	body    subtableShifted `subsliceStart:"AtStart" unionField:"version"`
-}
-
-type subtableShifted interface {
-	isSubtableShifted()
-}
-
-func (subtableShifted1) isSubtableShifted() {}
-func (subtableShifted2) isSubtableShifted() {}
-
-// binarygen: startOffset=2
-type subtableShifted1 struct {
-	f float32
-}
-
-// binarygen: startOffset=2
-type subtableShifted2 struct {
-	f float64
-}
-
-type shiftedVersion uint16
-
-const (
-	shiftedVersion1 shiftedVersion = iota
-	shiftedVersion2
-)
-
 type withEmbeded struct {
 	a, b, c byte
 	toBeEmbeded
@@ -160,7 +124,7 @@ type WithArray struct {
 }
 
 // binarygen: argument=kind uint16
-// binarygen: argument=version shiftedVersion
+// binarygen: argument=version uint16
 type withArgument struct {
 	array []uint16 // count is required
 }
@@ -172,7 +136,7 @@ type WithChildArgument struct {
 
 type PassArg struct {
 	kind          uint16
-	version       shiftedVersion
+	version       uint16
 	count         int32
 	customWithArg withArgument `arguments:"arrayCount=.count, kind=.kind, version=.version"`
 }

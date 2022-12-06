@@ -9,7 +9,6 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -416,15 +415,6 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		origin:    ty,
 		Fields:    make([]Field, st.NumFields()),
 		Arguments: cm.externalArguments,
-	}
-
-	if cm.startingOffset != "" {
-		// we only support integer shift for now
-		so, err := strconv.Atoi(cm.startingOffset)
-		if err != nil {
-			panic(fmt.Sprintf("unsupported startingOffset %s: %s", cm.startingOffset, err))
-		}
-		out.StartingOffset = so
 	}
 
 	for i := range out.Fields {

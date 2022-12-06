@@ -185,7 +185,7 @@ func ParsePassArg(src []byte) (PassArg, int, error) {
 	}
 	_ = src[7] // early bound checking
 	item.kind = binary.BigEndian.Uint16(src[0:])
-	item.version = shiftedVersion(binary.BigEndian.Uint16(src[2:]))
+	item.version = binary.BigEndian.Uint16(src[2:])
 	item.count = int32(binary.BigEndian.Uint32(src[4:]))
 	n += 8
 
@@ -194,7 +194,7 @@ func ParsePassArg(src []byte) (PassArg, int, error) {
 			err  error
 			read int
 		)
-		item.customWithArg, read, err = parseWithArgument(src[8:], int(item.count), uint16(item.kind), shiftedVersion(item.version))
+		item.customWithArg, read, err = parseWithArgument(src[8:], int(item.count), uint16(item.kind), uint16(item.version))
 		if err != nil {
 			return item, 0, fmt.Errorf("reading PassArg: %s", err)
 		}
@@ -245,36 +245,6 @@ func ParseRootTable(src []byte) (RootTable, int, error) {
 			offset += read
 		}
 		n = offset
-	}
-	return item, n, nil
-}
-
-func ParseShiftedLayout(src []byte) (ShiftedLayout, int, error) {
-	var item ShiftedLayout
-	n := 0
-	if L := len(src); L < 2 {
-		return item, 0, fmt.Errorf("reading ShiftedLayout: "+"EOF: expected length: 2, got %d", L)
-	}
-	item.version = shiftedVersion(binary.BigEndian.Uint16(src[0:]))
-	n += 2
-
-	{
-		var (
-			read int
-			err  error
-		)
-		switch item.version {
-		case shiftedVersion1:
-			item.body, read, err = parseSubtableShifted1(src[:])
-		case shiftedVersion2:
-			item.body, read, err = parseSubtableShifted2(src[:])
-		default:
-			err = fmt.Errorf("unsupported subtableShiftedVersion %d", item.version)
-		}
-		if err != nil {
-			return item, 0, fmt.Errorf("reading ShiftedLayout: %s", err)
-		}
-		n = read
 	}
 	return item, n, nil
 }
@@ -351,7 +321,7 @@ func ParseWithArray(src []byte) (WithArray, int, error) {
 	return item, n, nil
 }
 
-func ParseWithChildArgument(src []byte, arrayCount int, kind uint16, version shiftedVersion) (WithChildArgument, int, error) {
+func ParseWithChildArgument(src []byte, arrayCount int, kind uint16, version uint16) (WithChildArgument, int, error) {
 	var item WithChildArgument
 	n := 0
 	{
@@ -696,30 +666,6 @@ func parseSubtableITF2(src []byte) (subtableITF2, int, error) {
 	return item, n, nil
 }
 
-// the actual data starts at src[2:]
-func parseSubtableShifted1(src []byte) (subtableShifted1, int, error) {
-	var item subtableShifted1
-	n := 2
-	if L := len(src); L < 6 {
-		return item, 0, fmt.Errorf("reading subtableShifted1: "+"EOF: expected length: 6, got %d", L)
-	}
-	item.mustParse(src)
-	n += 4
-	return item, n, nil
-}
-
-// the actual data starts at src[2:]
-func parseSubtableShifted2(src []byte) (subtableShifted2, int, error) {
-	var item subtableShifted2
-	n := 2
-	if L := len(src); L < 10 {
-		return item, 0, fmt.Errorf("reading subtableShifted2: "+"EOF: expected length: 10, got %d", L)
-	}
-	item.mustParse(src)
-	n += 8
-	return item, n, nil
-}
-
 func parseToBeEmbeded(src []byte) (toBeEmbeded, int, error) {
 	var item toBeEmbeded
 	n := 0
@@ -797,7 +743,7 @@ func parseVarSize(src []byte) (varSize, int, error) {
 	return item, n, nil
 }
 
-func parseWithArgument(src []byte, arrayCount int, kind uint16, version shiftedVersion) (withArgument, int, error) {
+func parseWithArgument(src []byte, arrayCount int, kind uint16, version uint16) (withArgument, int, error) {
 	var item withArgument
 	n := 0
 	{
@@ -845,14 +791,6 @@ func (item *subtableITF1) mustParse(src []byte) {
 
 func (item *subtableITF2) mustParse(src []byte) {
 	item.F = src[0]
-}
-
-func (item *subtableShifted1) mustParse(src []byte) {
-	item.f = float32(binary.BigEndian.Uint32(src[2:]))
-}
-
-func (item *subtableShifted2) mustParse(src []byte) {
-	item.f = float64(binary.BigEndian.Uint64(src[2:]))
 }
 
 func (item *withFixedSize) mustParse(src []byte) {

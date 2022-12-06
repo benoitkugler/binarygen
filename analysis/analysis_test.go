@@ -50,17 +50,6 @@ func TestParseSource(t *testing.T) {
 	}
 }
 
-func TestStartingOffset(t *testing.T) {
-	ty := ana.ByName("startNoAtSubslice")
-	if ana.commentsMap[ty].startingOffset != "2" {
-		t.Fatal()
-	}
-
-	if u := ana.Tables[ty]; u.StartingOffset != 2 {
-		t.Fatal()
-	}
-}
-
 func TestAliases(t *testing.T) {
 	if ty := ana.ByName("WithAlias"); ana.printExpr(ana.forAliases[ty]["f"]) != "fl32" {
 		t.Fatal()
