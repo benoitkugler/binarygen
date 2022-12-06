@@ -12,7 +12,8 @@ The binary layout is specified in Go source files using struct tags :
 - 'offsetsArray' : Offset16 | Offset32 , for an array of offsets. Zero offsets are resolved to zero values.
 - 'subsliceStart' : AtStart | AtCurrent
 - 'unionField' : the name of a previous field 
+- 'unionTag' : the value of the tag identifying an union member
 - 'isOpaque' : anything (even the empty string)
 - 'arguments' : a comma separated list of values to pass to the field parsing function
 
-The special comment `// binarygen: startOffset=2` indicates that the table starts at `src[2:]`
+The special comment `// binarygen: argument=<name> <type>` indicates that the parsing function requires additionnal argument.
