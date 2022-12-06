@@ -188,6 +188,10 @@ type Offset struct {
 
 	// Size if the size of the offset field
 	Size BinarySize
+
+	// IsPointer is true if the target type is actually
+	// a pointer. In this case, [Target] is a [Struct].
+	IsPointer bool
 }
 
 // IsFixedSize returns [Size], `false`, since, even if the offset itself has a fixed size,

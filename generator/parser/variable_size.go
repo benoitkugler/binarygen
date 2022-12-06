@@ -8,8 +8,26 @@ import (
 	gen "github.com/benoitkugler/binarygen/generator"
 )
 
+func parserForStructTo(field an.Field, cc *gen.Context, target string) string {
+	ty, _ := field.Type.(an.Struct)
+	args := resolveSliceArgument(field.Type, *cc)
+	args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
+	return fmt.Sprintf(`var (
+			err error
+			read int
+		)
+		%s, read, err = %s(%s[%s:], %s)
+		if err != nil {
+			%s 
+		}
+		%s
+		`, target, gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), args,
+		cc.ErrReturn(gen.ErrVariable("err")),
+		cc.Offset.UpdateStatementDynamic("read"))
+}
+
 func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) string {
-	switch ty := field.Type.(type) {
+	switch field.Type.(type) {
 	case an.Slice:
 		return parserForSlice(field, cc)
 	case an.Opaque:
@@ -19,20 +37,7 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 	case an.Union:
 		return parserForUnion(field, cc)
 	case an.Struct:
-		args := resolveSliceArgument(field.Type, *cc)
-		args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
-		return fmt.Sprintf(`var (
-			err error
-			read int
-		)
-		%s, read, err = %s(%s[%s:], %s)
-		if err != nil {
-			%s 
-		}
-		%s
-		`, cc.Selector(field.Name), gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), args,
-			cc.ErrReturn(gen.ErrVariable("err")),
-			cc.Offset.UpdateStatementDynamic("read"))
+		return parserForStructTo(field, cc, cc.Selector(field.Name))
 	}
 	return ""
 }
@@ -236,7 +241,16 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	// Step 2 - check the length for the pointed value
 	offsetVarName := offsetName(cc.Selector(fi.Name))
 
-	// Step 2 - if needed adjust the source for the offset
+	// Step 3 - for pointer types, allocate memory,
+	// and change the target
+	allocate, updatePointer, tmpVarName := "", "", ""
+	if of.IsPointer {
+		tmpVarName = "tmp" + strings.Title(fi.Name)
+		allocate = fmt.Sprintf("var  %s %s", tmpVarName, gen.Name(of.Target))
+		updatePointer = fmt.Sprintf("%s = &%s", cc.Selector(fi.Name), tmpVarName)
+	}
+
+	// Step 4 - if needed adjust the source for the offset
 	savedSlice := cc.Slice
 	if fi.OffsetRelativeTo == an.Parent {
 		cc.Slice = "parentSrc"
@@ -245,17 +259,24 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	}
 	lengthCheck := lengthCheck(*cc, offsetVarName)
 
-	// Step 3 - finally delegate to the target parser
+	// Step 5 - finally delegate to the target parser
 	savedOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(offsetVarName)
-	readTarget := parserForVariableSize(an.Field{
+
+	var readTarget string
+	targetField := an.Field{
 		Type:                      of.Target,
 		Layout:                    fi.Layout,
 		Name:                      fi.Name,
 		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
 		UnionTag:                  fi.UnionTag,
 		OffsetRelativeTo:          fi.OffsetRelativeTo,
-	}, parent, cc)
+	}
+	if of.IsPointer {
+		readTarget = parserForStructTo(targetField, cc, tmpVarName)
+	} else {
+		readTarget = parserForVariableSize(targetField, parent, cc)
+	}
 
 	// restore value
 	cc.Slice = savedSlice
@@ -265,11 +286,15 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	if %s != 0 { // ignore null offset
 		%s
 		%s
+		%s
+		%s
 	}
 	`,
 		offsetVarName,
 		lengthCheck,
+		allocate,
 		readTarget,
+		updatePointer,
 	)
 }
 

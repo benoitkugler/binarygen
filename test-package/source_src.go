@@ -43,7 +43,8 @@ type WithOffset struct {
 	offsetToSlice     []uint64 `offsetSize:"Offset32"`
 	offsetToStruct    varSize  `offsetSize:"Offset32"`
 	a, b, c           byte
-	offsetToUnbounded []byte `offsetSize:"Offset16" arrayCount:"ToEnd"`
+	offsetToUnbounded []byte   `offsetSize:"Offset16" arrayCount:"ToEnd"`
+	optional          *varSize `offsetSize:"Offset32"`
 }
 
 type WithOffsetArray struct {

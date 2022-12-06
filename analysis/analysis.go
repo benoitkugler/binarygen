@@ -352,11 +352,20 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 	if offset := tags.offsetSize; offset != 0 {
 		// adjust the tags and "recurse" to the actual type
 		tags.offsetSize = NoOffset
+
+		// handle pointer types by dereferencing
+		pointer, isPointer := ty.Underlying().(*types.Pointer)
+		if isPointer {
+			ty = pointer.Elem()
+		}
 		target := an.createTypeFor(ty, tags, decl)
 		if _, isFixedSize := target.IsFixedSize(); isFixedSize {
 			panic("offset to fixed size type is not supported")
 		}
-		return Offset{Target: target, Size: offset.binary()}
+		if _, isStruct := target.(Struct); isPointer && !isStruct {
+			panic("pointer are only supported for structs")
+		}
+		return Offset{Target: target, Size: offset.binary(), IsPointer: isPointer}
 	}
 
 	// now inspect the actual go type

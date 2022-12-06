@@ -405,10 +405,10 @@ func ParseWithImplicitITF(src []byte) (WithImplicitITF, int, error) {
 func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error) {
 	var item WithOffset
 	n := 0
-	if L := len(src); L < 15 {
-		return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 15, got %d", L)
+	if L := len(src); L < 19 {
+		return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: 19, got %d", L)
 	}
-	_ = src[14] // early bound checking
+	_ = src[18] // early bound checking
 	item.version = binary.BigEndian.Uint16(src[0:])
 	offsetOffsetToSlice := int(binary.BigEndian.Uint32(src[2:]))
 	offsetOffsetToStruct := int(binary.BigEndian.Uint32(src[6:]))
@@ -416,7 +416,8 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 	item.b = src[11]
 	item.c = src[12]
 	offsetOffsetToUnbounded := int(binary.BigEndian.Uint16(src[13:]))
-	n += 15
+	offsetOptional := int(binary.BigEndian.Uint32(src[15:]))
+	n += 19
 
 	{
 
@@ -434,6 +435,7 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 				item.offsetToSlice[i] = binary.BigEndian.Uint64(src[offsetOffsetToSlice+i*8:])
 			}
 			offsetOffsetToSlice += offsetToSliceCount * 8
+
 		}
 	}
 	{
@@ -464,6 +466,28 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 
 			item.offsetToUnbounded = src[offsetOffsetToUnbounded:]
 			offsetOffsetToUnbounded = len(src)
+
+		}
+	}
+	{
+
+		if offsetOptional != 0 { // ignore null offset
+			if L := len(src); L < offsetOptional {
+				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetOptional, L)
+			}
+
+			var tmpOptional varSize
+			var (
+				err  error
+				read int
+			)
+			tmpOptional, read, err = parseVarSize(src[offsetOptional:])
+			if err != nil {
+				return item, 0, fmt.Errorf("reading WithOffset: %s", err)
+			}
+			offsetOptional += read
+
+			item.optional = &tmpOptional
 		}
 	}
 	return item, n, nil
