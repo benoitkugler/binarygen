@@ -247,7 +247,7 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	if of.IsPointer {
 		tmpVarName = "tmp" + strings.Title(fi.Name)
 		allocate = fmt.Sprintf("var  %s %s", tmpVarName, gen.Name(of.Target))
-		updatePointer = fmt.Sprintf("%s = &%s", cc.Selector(fi.Name), tmpVarName)
+		updatePointer = fmt.Sprintf("\n%s = &%s", cc.Selector(fi.Name), tmpVarName)
 	}
 
 	// Step 4 - if needed adjust the source for the offset
@@ -286,8 +286,7 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	if %s != 0 { // ignore null offset
 		%s
 		%s
-		%s
-		%s
+		%s%s
 	}
 	`,
 		offsetVarName,
