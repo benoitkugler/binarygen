@@ -358,10 +358,12 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 			ty = pointer.Elem()
 		}
 		target := an.createTypeFor(ty, tags, decl)
-		if _, isFixedSize := target.IsFixedSize(); isFixedSize {
-			panic("offset to fixed size type is not supported")
+		_, isFixedSize := target.IsFixedSize()
+		_, isStruct := target.(Struct)
+		if isFixedSize && !isStruct {
+			panic("offset to (non struct) fixed size type is not supported")
 		}
-		if _, isStruct := target.(Struct); isPointer && !isStruct {
+		if isPointer && !isStruct {
 			panic("pointer are only supported for structs")
 		}
 		return Offset{Target: target, Size: offset.binary(), IsPointer: isPointer}
