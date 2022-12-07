@@ -332,6 +332,10 @@ func isTagImplicit(members []Struct) (UnionTagImplicit, bool) {
 // The parsing and writting step will be replaced by placeholder methods.
 type Opaque struct {
 	origin types.Type
+
+	// ParserReturnsLength is true if the custom parsing
+	// function returns the length read.
+	ParserReturnsLength bool
 }
 
 func (Opaque) IsFixedSize() (BinarySize, bool) { return 0, false }

@@ -62,8 +62,13 @@ func TestAliases(t *testing.T) {
 }
 
 func TestOpaque(t *testing.T) {
-	fi := ana.Tables[ana.ByName("WithOpaque")].Fields[1]
-	if _, isOpaque := fi.Type.(Opaque); !isOpaque {
+	ta := ana.Tables[ana.ByName("WithOpaque")]
+	fi1 := ta.Fields[1].Type.(Opaque)
+	if fi1.ParserReturnsLength {
+		t.Fatal()
+	}
+	fi2 := ta.Fields[2].Type.(Opaque)
+	if !fi2.ParserReturnsLength {
 		t.Fatal()
 	}
 }

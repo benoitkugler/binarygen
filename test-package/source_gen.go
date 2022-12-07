@@ -405,7 +405,6 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 				item.offsetToSlice[i] = binary.BigEndian.Uint64(src[offsetOffsetToSlice+i*8:])
 			}
 			offsetOffsetToSlice += offsetToSliceCount * 8
-
 		}
 	}
 	{
@@ -436,7 +435,6 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 
 			item.offsetToUnbounded = src[offsetOffsetToUnbounded:]
 			offsetOffsetToUnbounded = len(src)
-
 		}
 	}
 	{
@@ -512,7 +510,14 @@ func ParseWithOpaque(src []byte) (WithOpaque, int, error) {
 
 	{
 
-		read, err := item.parseOpaque(src[:])
+		err := item.parseOpaque(src[:])
+		if err != nil {
+			return item, 0, fmt.Errorf("reading WithOpaque: %s", err)
+		}
+	}
+	{
+
+		read, err := item.parseOpaqueWithLength(src[:])
 		if err != nil {
 			return item, 0, fmt.Errorf("reading WithOpaque: %s", err)
 		}

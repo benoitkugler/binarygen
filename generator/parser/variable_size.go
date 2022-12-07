@@ -45,6 +45,7 @@ func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) st
 // delegate the parsing to a user written method of the form
 // <structName>.parse<fieldName>
 func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
+	op := field.Type.(an.Opaque)
 	start := cc.Offset.Value()
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
 	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
@@ -54,16 +55,27 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 	// the offset for the opaque "child" type must be shifted by one level
 	args := sliceArgs(field.OffsetRelativeTo<<1, *cc)
 	args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(parent, field.Name))
-	return fmt.Sprintf(`
-	read, err := %s.parse%s(%s[%s:], %s)
-	if err != nil {
+	if op.ParserReturnsLength {
+		return fmt.Sprintf(`
+		read, err := %s.parse%s(%s[%s:], %s)
+		if err != nil {
+			%s
+		}
 		%s
+		`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start, args,
+			cc.ErrReturn(gen.ErrVariable("err")),
+			updateOffset,
+		)
+	} else {
+		return fmt.Sprintf(`
+		err := %s.parse%s(%s[%s:], %s)
+		if err != nil {
+			%s
+		}
+		`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start, args,
+			cc.ErrReturn(gen.ErrVariable("err")),
+		)
 	}
-	%s
-	`, cc.ObjectVar, strings.Title(field.Name), cc.Slice, start, args,
-		cc.ErrReturn(gen.ErrVariable("err")),
-		updateOffset,
-	)
 }
 
 // ------------------------- slices -------------------------

@@ -417,6 +417,18 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		Arguments: cm.externalArguments,
 	}
 
+	customParseFunc := map[string]bool{}
+	for i := 0; i < ty.NumMethods(); i++ {
+		m := ty.Method(i)
+		mName := m.Name()
+		if mName == "parseEnd" {
+			out.ParseEnd = m
+		} else if _, field, ok := strings.Cut(mName, "parse"); ok {
+			returnsLength := m.Type().(*types.Signature).Results().Len() == 2
+			customParseFunc[field] = returnsLength
+		}
+	}
+
 	for i := range out.Fields {
 		field := st.Field(i)
 
@@ -426,6 +438,10 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		astDecl := an.forAliases[ty][field.Name()]
 
 		fieldType := an.createTypeFor(field.Type(), tags, astDecl)
+		if opaque, isOpaque := fieldType.(Opaque); isOpaque {
+			opaque.ParserReturnsLength = customParseFunc[strings.Title(field.Name())]
+			fieldType = opaque
+		}
 
 		out.Fields[i] = Field{
 			Name:                      field.Name(),
@@ -434,14 +450,6 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 			ArgumentsProvidedByFields: tags.requiredFieldArguments,
 			UnionTag:                  tags.unionTag,
 			OffsetRelativeTo:          tags.offsetRelativeTo,
-		}
-	}
-
-	for i := 0; i < ty.NumMethods(); i++ {
-		m := ty.Method(i)
-		if m.Name() == "parseEnd" {
-			out.ParseEnd = m
-			break
 		}
 	}
 

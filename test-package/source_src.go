@@ -82,12 +82,18 @@ type multipleScopes struct {
 type customType map[string]int
 
 type WithOpaque struct {
-	f      uint16
-	opaque customType `isOpaque:""`
+	f                uint16
+	opaque           customType `isOpaque:""`
+	opaqueWithLength customType `isOpaque:""`
 }
 
 // parseOpaque is called by the generated parsing code
-func (wo *WithOpaque) parseOpaque(src []byte) (int, error) {
+func (wo *WithOpaque) parseOpaque(src []byte) error {
+	return nil
+}
+
+// parseOpaqueWithLength is called by the generated parsing code
+func (wo *WithOpaque) parseOpaqueWithLength(src []byte) (int, error) {
 	return 0, nil
 }
 
