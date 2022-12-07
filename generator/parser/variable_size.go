@@ -48,7 +48,7 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 	op := field.Type.(an.Opaque)
 	start := cc.Offset.Value()
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
-	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
+	if op.SubsliceStart == an.AtStart { // do not use the current offset as start
 		start = ""
 		updateOffset = cc.Offset.SetStatement("read")
 	}
@@ -90,17 +90,16 @@ func parserForOpaque(field an.Field, parent an.Struct, cc *gen.Context) string {
 //     and handled in a separate function
 func parserForSlice(field an.Field, cc *gen.Context) string {
 	sl := field.Type.(an.Slice)
-	// no matter the kind of element, resolve the count...
+	// no matter the kind of element, resolve the count
 	countExpr, countCode := codeForSliceCount(sl, field.Name, cc)
-
-	// ... and adjust the start offset
-	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
-		cc.Offset = gen.NewOffset(cc.Offset.Name, 0)
-	}
 
 	codes := []string{countCode}
 
 	if sl.IsRawData() { // special case for bytes data
+		// adjust the start offset if needed
+		if sl.SubsliceStart == an.AtStart { // do not use the current offset as start
+			cc.Offset = gen.NewOffset(cc.Offset.Name, 0)
+		}
 		codes = append(codes, parserForSliceBytes(sl, cc, countExpr, field.Name))
 	} else if offset, isOffset := sl.Elem.(an.Offset); isOffset { // special case for slice of offsets
 		codes = append(codes, parserForSliceOfOffsets(offset, cc, countExpr, field))
@@ -278,7 +277,6 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	var readTarget string
 	targetField := an.Field{
 		Type:                      of.Target,
-		Layout:                    fi.Layout,
 		Name:                      fi.Name,
 		ArgumentsProvidedByFields: fi.ArgumentsProvidedByFields,
 		UnionTag:                  fi.UnionTag,
@@ -388,12 +386,8 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 
 // -- unions --
 
-func unionCases(u an.Union, subsliceStart an.SubsliceStart, cc *gen.Context, providedArguments []an.ProvidedArgument, target string) []string {
+func unionCases(u an.Union, cc *gen.Context, providedArguments []an.ProvidedArgument, target string) []string {
 	start := cc.Offset.Value()
-	if subsliceStart == an.AtStart { // do not use the current offset as start
-		start = ""
-	}
-
 	flags := u.UnionTag.TagsCode()
 	var cases []string
 	for i, flag := range flags {
@@ -444,7 +438,7 @@ func standaloneUnionBody(u an.Union, cc *gen.Context, cases []string) string {
 func parserForUnion(field an.Field, cc *gen.Context) string {
 	u := field.Type.(an.Union)
 
-	cases := unionCases(u, field.Layout.SubsliceStart, cc, field.ArgumentsProvidedByFields, cc.Selector(field.Name))
+	cases := unionCases(u, cc, field.ArgumentsProvidedByFields, cc.Selector(field.Name))
 
 	var code string
 	switch scheme := u.UnionTag.(type) {
@@ -488,8 +482,5 @@ func parserForUnion(field an.Field, cc *gen.Context) string {
 	}
 
 	updateOffset := cc.Offset.UpdateStatementDynamic("read")
-	if field.Layout.SubsliceStart == an.AtStart { // do not use the current offset as start
-		updateOffset = cc.Offset.SetStatement("read")
-	}
 	return code + updateOffset
 }

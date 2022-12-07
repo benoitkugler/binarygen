@@ -92,7 +92,7 @@ func parserForStanaloneUnion(un an.Union) gen.Declaration {
 		args = append(args, arg.asSignature())
 	}
 
-	cases := unionCases(un, an.AtCurrent, context, nil, context.ObjectVar)
+	cases := unionCases(un, context, nil, context.ObjectVar)
 	code := standaloneUnionBody(un, context, cases)
 	body = append(body, code)
 

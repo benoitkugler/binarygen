@@ -78,9 +78,8 @@ type ProvidedArgument struct {
 // Field is a struct field.
 // Embeded fields are not resolved.
 type Field struct {
-	Type   Type
-	Layout Layout
-	Name   string
+	Type Type
+	Name string
 
 	// name of other fields which will be provided
 	// to parsing/writing functions
@@ -225,6 +224,9 @@ type Slice struct {
 	Count ArrayCount
 	// CountExpr is used when [Count] is [ComputedField] or [ToComputedField]
 	CountExpr string
+
+	// SubsliceStart is only used for raw data ([]byte).
+	SubsliceStart SubsliceStart
 }
 
 // IsFixedSize returns false and the length of the fixed size length prefix, if any.
@@ -336,6 +338,9 @@ type Opaque struct {
 	// ParserReturnsLength is true if the custom parsing
 	// function returns the length read.
 	ParserReturnsLength bool
+
+	// How should the slice be passed
+	SubsliceStart SubsliceStart
 }
 
 func (Opaque) IsFixedSize() (BinarySize, bool) { return 0, false }

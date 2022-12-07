@@ -120,7 +120,7 @@ func TestRawdata(t *testing.T) {
 	}
 
 	startTo := ty.Fields[2]
-	if startTo.Layout.SubsliceStart != AtStart {
+	if startTo.Type.(Slice).SubsliceStart != AtStart {
 		t.Fatal()
 	}
 

@@ -345,7 +345,7 @@ func sliceElement(typeDecl ast.Expr) ast.Expr {
 func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr) Type {
 	// first deals with special cases, defined by tags
 	if tags.isOpaque {
-		return Opaque{origin: ty}
+		return Opaque{origin: ty, SubsliceStart: tags.subsliceStart}
 	}
 
 	if offset := tags.offsetSize; offset != 0 {
@@ -389,7 +389,11 @@ func (an *Analyser) createTypeFor(ty types.Type, tags parsedTags, decl ast.Expr)
 		elemTags := parsedTags{offsetSize: tags.offsetsArray}
 		// recurse on the element
 		elem := an.createTypeFor(under.Elem(), elemTags, elemDecl)
-		return Slice{origin: ty, Elem: elem, Count: tags.arrayCount, CountExpr: tags.arrayCountField}
+		return Slice{
+			origin: ty, Elem: elem,
+			Count: tags.arrayCount, CountExpr: tags.arrayCountField,
+			SubsliceStart: tags.subsliceStart,
+		}
 	case *types.Interface:
 		// anonymous interface are not supported
 		return an.createFromInterface(ty.(*types.Named), tags.unionField)
@@ -448,7 +452,6 @@ func (an *Analyser) createFromStruct(ty *types.Named) Struct {
 		out.Fields[i] = Field{
 			Name:                      field.Name(),
 			Type:                      fieldType,
-			Layout:                    Layout{SubsliceStart: tags.subsliceStart},
 			ArgumentsProvidedByFields: tags.requiredFieldArguments,
 			UnionTag:                  tags.unionTag,
 			OffsetRelativeTo:          tags.offsetRelativeTo,

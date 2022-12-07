@@ -168,16 +168,6 @@ func parseComments(doc *ast.CommentGroup) (out commments) {
 	return out
 }
 
-// Layout provides additionnal information about how
-// a struct field is written in binary files.
-// For simple scalar field, it is usually empty since the
-// Go type provides enough information.
-//
-// It is defined in the Go source files using struct tags.
-type Layout struct {
-	SubsliceStart SubsliceStart
-}
-
 // ArrayCount defines how the number of elements in an array is defined
 type ArrayCount uint8
 
