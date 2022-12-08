@@ -107,6 +107,10 @@ type Context struct {
 	// Offset holds the variable name for the current offset,
 	// and its value when known at compile time
 	Offset Offset
+
+	// IgnoreUpdateOffset is true if the update offset statement
+	// should not be written
+	IgnoreUpdateOffset bool
 }
 
 type Err interface {

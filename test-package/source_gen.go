@@ -56,15 +56,11 @@ func ParseElement(src []byte, parentSrc []byte) (Element, int, error) {
 				return item, 0, fmt.Errorf("reading Element: "+"EOF: expected length: %d, got %d", offsetV, L)
 			}
 
-			var (
-				err  error
-				read int
-			)
-			item.v, read, err = parseVarSize(parentSrc[offsetV:])
+			var err error
+			item.v, _, err = parseVarSize(parentSrc[offsetV:])
 			if err != nil {
 				return item, 0, fmt.Errorf("reading Element: %s", err)
 			}
-			offsetV += read
 
 		}
 	}
@@ -221,15 +217,11 @@ func ParseRootTable(src []byte) (RootTable, int, error) {
 				return item, 0, fmt.Errorf("reading RootTable: "+"EOF: expected length: %d, got %d", offsetE, L)
 			}
 
-			var (
-				err  error
-				read int
-			)
-			item.E, read, err = ParseElement(src[offsetE:], src)
+			var err error
+			item.E, _, err = ParseElement(src[offsetE:], src)
 			if err != nil {
 				return item, 0, fmt.Errorf("reading RootTable: %s", err)
 			}
-			offsetE += read
 
 		}
 	}
@@ -265,15 +257,11 @@ func ParseSubElement(src []byte, grandParentSrc []byte) (SubElement, int, error)
 				return item, 0, fmt.Errorf("reading SubElement: "+"EOF: expected length: %d, got %d", offsetV, L)
 			}
 
-			var (
-				err  error
-				read int
-			)
-			item.v, read, err = parseVarSize(grandParentSrc[offsetV:])
+			var err error
+			item.v, _, err = parseVarSize(grandParentSrc[offsetV:])
 			if err != nil {
 				return item, 0, fmt.Errorf("reading SubElement: %s", err)
 			}
-			offsetV += read
 
 		}
 	}
@@ -414,15 +402,11 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 				return item, 0, fmt.Errorf("reading WithOffset: "+"EOF: expected length: %d, got %d", offsetOffsetToStruct, L)
 			}
 
-			var (
-				err  error
-				read int
-			)
-			item.offsetToStruct, read, err = parseVarSize(src[offsetOffsetToStruct:])
+			var err error
+			item.offsetToStruct, _, err = parseVarSize(src[offsetOffsetToStruct:])
 			if err != nil {
 				return item, 0, fmt.Errorf("reading WithOffset: %s", err)
 			}
-			offsetOffsetToStruct += read
 
 		}
 	}
@@ -434,7 +418,6 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 			}
 
 			item.offsetToUnbounded = src[offsetOffsetToUnbounded:]
-			offsetOffsetToUnbounded = len(src)
 		}
 	}
 	{
@@ -445,15 +428,11 @@ func ParseWithOffset(src []byte, offsetToSliceCount int) (WithOffset, int, error
 			}
 
 			var tmpOptional varSize
-			var (
-				err  error
-				read int
-			)
-			tmpOptional, read, err = parseVarSize(src[offsetOptional:])
+			var err error
+			tmpOptional, _, err = parseVarSize(src[offsetOptional:])
 			if err != nil {
 				return item, 0, fmt.Errorf("reading WithOffset: %s", err)
 			}
-			offsetOptional += read
 
 			item.optional = &tmpOptional
 		}

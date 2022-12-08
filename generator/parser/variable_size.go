@@ -12,18 +12,30 @@ func parserForStructTo(field an.Field, cc *gen.Context, target string) string {
 	ty, _ := field.Type.(an.Struct)
 	args := resolveSliceArgument(field.Type, *cc)
 	args += resolveArguments(cc.ObjectVar, field.ArgumentsProvidedByFields, requiredArgs(ty, field.Name))
-	return fmt.Sprintf(`var (
-			err error
-			read int
-		)
-		%s, read, err = %s(%s[%s:], %s)
+	start := cc.Offset.Value()
+	updateOffset := cc.Offset.UpdateStatementDynamic("read")
+	vars := `var (
+		err error
+		read int
+	)`
+	readTarget := "read"
+	if cc.IgnoreUpdateOffset {
+		updateOffset = ""
+		vars = "var err error"
+		readTarget = "_"
+	}
+	return fmt.Sprintf(`%s
+		%s, %s, err = %s(%s[%s:], %s)
 		if err != nil {
 			%s 
 		}
 		%s
-		`, target, gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, cc.Offset.Value(), args,
+		`,
+		vars,
+		target, readTarget, gen.ParseFunctionName(gen.Name(field.Type)), cc.Slice, start, args,
 		cc.ErrReturn(gen.ErrVariable("err")),
-		cc.Offset.UpdateStatementDynamic("read"))
+		updateOffset,
+	)
 }
 
 func parserForVariableSize(field an.Field, parent an.Struct, cc *gen.Context) string {
@@ -135,6 +147,9 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 	// special case for ToEnd : do not use an intermediate variable
 	if sl.Count == an.ToEnd {
 		readStatement := fmt.Sprintf("%s = %s[%s:]", target, cc.Slice, start)
+		if cc.IgnoreUpdateOffset {
+			return readStatement
+		}
 		offsetStatemtent := cc.Offset.SetStatement(fmt.Sprintf("len(%s)", cc.Slice))
 		return readStatement + "\n" + offsetStatemtent
 	}
@@ -145,6 +160,11 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 	}
 
 	errorStatement := fmt.Sprintf(`"EOF: expected length: %%d, got %%d", L, len(%s)`, cc.Slice)
+
+	updateOffset := cc.Offset.SetStatement("L")
+	if cc.IgnoreUpdateOffset {
+		updateOffset = ""
+	}
 	return fmt.Sprintf(` 
 			%s
 			if len(%s) < L {
@@ -157,7 +177,7 @@ func parserForSliceBytes(sl an.Slice, cc *gen.Context, count gen.Expression, fie
 		cc.Slice,
 		cc.ErrReturn(gen.ErrFormated(errorStatement)),
 		target, cc.Slice, start,
-		cc.Offset.SetStatement("L"),
+		updateOffset,
 	)
 }
 
@@ -273,6 +293,7 @@ func parserForOffset(fi an.Field, parent an.Struct, cc *gen.Context) string {
 	// Step 5 - finally delegate to the target parser
 	savedOffset := cc.Offset
 	cc.Offset = gen.NewOffsetDynamic(offsetVarName)
+	cc.IgnoreUpdateOffset = true
 
 	var readTarget string
 	targetField := an.Field{
