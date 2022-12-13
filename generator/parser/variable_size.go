@@ -360,7 +360,7 @@ func parserForSliceOfOffsets(of an.Offset, cc *gen.Context, count gen.Expression
 	cc.Offset = gen.NewOffsetDynamic(cc.Offset.WithAffine("i", elementSize))
 
 	args := resolveSliceArgument(of.Target, *cc)
-	args = resolveArguments(cc.ObjectVar, fi.ArgumentsProvidedByFields, requiredArgs(of.Target, fi.Name))
+	args += resolveArguments(cc.ObjectVar, fi.ArgumentsProvidedByFields, requiredArgs(of.Target, fi.Name))
 
 	// Loop body :
 	// Step 1 - read the offset value

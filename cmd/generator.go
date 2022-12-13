@@ -60,7 +60,6 @@ func main() {
 
 		buf := generator.NewBuffer(accu)
 		parser.ParsersForFile(ana, &buf)
-		// TODO: writer
 
 		content := []byte(fmt.Sprintf(`
 		package %s

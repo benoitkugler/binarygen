@@ -41,4 +41,7 @@ func TestGenerateParser(t *testing.T) {
 	}
 
 	err = exec.Command("goimports", "-w", outfile).Run()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
